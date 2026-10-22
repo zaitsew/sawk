@@ -77,6 +77,15 @@ export SAWK_TOKEN
 
 # Subscription, not API billing: an API key in the environment would switch the run to metered use.
 unset ANTHROPIC_API_KEY OPENAI_API_KEY
+# Codex also keeps a saved login, which may be an API key (`codex login --with-api-key`). That would
+# bill every night, so refuse to run unless Codex is signed in with a ChatGPT account.
+if [ "$AGENT" = codex ]; then
+  login="$(codex login status 2>&1 || true)"
+  if ! printf '%s' "$login" | grep -qi 'chatgpt'; then
+    log "codex is not signed in with ChatGPT (codex login status: $(printf '%s' "$login" | tail -n1)); refusing a metered run"
+    exit 78
+  fi
+fi
 
 mkdir -p "$STATE_DIR"
 cd "$STATE_DIR"
@@ -92,7 +101,7 @@ else
   RUNNER=(perl -e 'my $t = shift; my $pid = fork(); die "fork: $!" unless defined $pid;
                    if ($pid == 0) { exec @ARGV or die "exec: $!" }
                    local $SIG{ALRM} = sub { kill "TERM", $pid; sleep 5; kill "KILL", $pid; exit 124 };
-                   alarm $t; waitpid($pid, 0); exit($? >> 8)' "$TIMEOUT")
+                   alarm $t; waitpid($pid, 0); exit(($? & 127) ? 128 + ($? & 127) : $? >> 8)' "$TIMEOUT")
 fi
 
 log "start agent=$AGENT timeout=${TIMEOUT}s"

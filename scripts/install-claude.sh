@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Connect Claude Code to SAWk and schedule the nightly run (macOS).
 #
-#   scripts/install-claude.sh [--dry-run] [--uninstall] [--no-launchd] [--no-nightly]
+#   scripts/install-claude.sh [--dry-run] [--uninstall] [--purge] [--no-launchd] [--no-nightly]
 #                             [--store-token-in-config]
 #
 # What it does, in order:
@@ -13,14 +13,15 @@
 #
 # Needs: SAWK_TOKEN (create it in the web app, Agents screen; or type it when asked) and
 #        SAWK_URL (default: SUPABASE_URL from .env + /functions/v1/sawk).
-# Safe to re-run. --uninstall removes everything this script added, including the Keychain item.
+# Safe to re-run. --uninstall removes what this script added; the token and helper stay while Codex uses them (--purge removes them too).
 set -euo pipefail
 
-DRY=0; UNINSTALL=0; LAUNCHD=1; NIGHTLY=1; TOKEN_IN_CONFIG=0
+DRY=0; UNINSTALL=0; PURGE=0; LAUNCHD=1; NIGHTLY=1; TOKEN_IN_CONFIG=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY=1 ;;
     --uninstall) UNINSTALL=1 ;;
+    --purge) UNINSTALL=1; PURGE=1 ;;
     --no-launchd) LAUNCHD=0 ;;
     --no-nightly) NIGHTLY=0 ;;
     --store-token-in-config) TOKEN_IN_CONFIG=1 ;;
@@ -55,14 +56,25 @@ if [ "$UNINSTALL" = 1 ]; then
   else echo "    none"; fi
 
   say "launchd job"
-  if [ "$LAUNCHD" = 1 ]; then
-    run launchctl bootout "gui/$(id -u)/$LABEL" || true
+  # One label serves both agents; leave the job alone when it runs Codex (install-codex.sh owns it).
+  if [ -f "$PLIST" ] && grep -q '<string>codex</string>' "$PLIST"; then
+    echo "    the nightly job runs Codex; left alone"
+  else
+    if [ "$LAUNCHD" = 1 ]; then
+      run launchctl bootout "gui/$(id -u)/$LABEL" || true
+    fi
+    [ -f "$PLIST" ] && run rm "$PLIST" || echo "    no $PLIST"
   fi
-  [ -f "$PLIST" ] && run rm "$PLIST" || echo "    no $PLIST"
 
+  # The helper and the Keychain token are shared with Codex (scripts/install-codex.sh): keep them
+  # while Codex still uses SAWk, unless --purge.
   say "Helper and Keychain item"
-  [ -f "$HELPER" ] && run rm "$HELPER" || echo "    no helper"
-  run security delete-generic-password -s sawk -a token || echo "    no Keychain item"
+  if [ "$PURGE" != 1 ] && command -v codex >/dev/null 2>&1 && codex mcp get sawk >/dev/null 2>&1; then
+    echo "    kept: Codex still uses them (pass --purge to remove anyway)"
+  else
+    [ -f "$HELPER" ] && run rm "$HELPER" || echo "    no helper"
+    run security delete-generic-password -s sawk -a token || echo "    no Keychain item"
+  fi
   say "done. The log $LOG is kept. Revoke the token in the web app (Agents screen) if you will not reuse it."
   exit 0
 fi
