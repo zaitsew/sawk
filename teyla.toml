@@ -89,6 +89,13 @@ extension = "2026-10-23: owner asked for it in the kickoff (\"deeply integrated 
 #                                       # `paused`, never a problem; delete the key to watch it again
 
 
+[[routine]]
+name = "nightly-agent-run"
+kind = "launchd"
+label = "com.zaitsew.sawk.nightly"
+every = "1d"
+log = "~/Library/Logs/sawk-nightly.log"
+
 # ---------------------------------------------------------------------------
 # A check: the half only a human can confirm, from the outside, today.
 # ---------------------------------------------------------------------------

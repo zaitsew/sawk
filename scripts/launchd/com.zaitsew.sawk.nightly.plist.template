@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- SAWk nightly agent run. Rendered by scripts/install-claude.sh (placeholders in __DOUBLE_UNDERSCORES__).
+     05:15 local time. If the Mac sleeps then, launchd runs the job on wake. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.zaitsew.sawk.nightly</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__RUN_SCRIPT__</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>5</integer>
+    <key>Minute</key>
+    <integer>15</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>SAWK_AGENT</key>
+    <string>__AGENT__</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/sawk-nightly.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/sawk-nightly.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
