@@ -44,6 +44,8 @@ export async function legacyKey(role: string) {
 
 export async function setup() {
   const t = await testDb();
+  // Migration 0003 seeds the real Valencia sources; these tests bring their own.
+  await t.sql`delete from sawk.sources`;
   const lines: Record<string, unknown>[] = [];
   const deps: Deps = {
     supabaseUrl: SUPABASE_URL,
