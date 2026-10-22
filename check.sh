@@ -40,7 +40,7 @@ fi
 # --- what a deploy still needs (not a failure: tests do not need it) -----------
 todo=()
 [ -n "${SUPABASE_URL:-}" ] || todo+=("SUPABASE_URL (see .env.example)")
-[ -n "${DATABASE_URL:-}" ] || todo+=("DATABASE_URL (see .env.example)")
+[ -n "${DATABASE_URL:-}${SUPABASE_PROJECT_REF:-}" ] || todo+=("DATABASE_URL or SUPABASE_PROJECT_REF (see .env.example)")
 command -v supabase >/dev/null 2>&1 || todo+=("supabase CLI, to deploy the functions")
 if [ "${#todo[@]}" -gt 0 ]; then
   echo "To deploy, still set:"; for t in "${todo[@]}"; do echo "  - $t"; done
