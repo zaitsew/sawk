@@ -1,0 +1,4 @@
+# Generated: dependency lock files and screenshots.
+deno.lock
+web/package-lock.json
+web/docs/screens
