@@ -1,0 +1,9 @@
+# fixture
+User-agent: *
+Disallow: /private/
+Disallow: /*?location=
+Disallow: /search$
+Allow: /private/public-page
+
+User-agent: SAWkBadBot
+Disallow: /
