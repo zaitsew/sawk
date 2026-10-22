@@ -301,6 +301,7 @@ Deno.test("taste: means, likes, avoids, card and hide from the person's own revi
   await review(ME, "trip-a", { kind: "stay", id: "s-vce" }, 5);
   await review(ME, "trip-a", { kind: "place", id: "VCE" }, 3);
   await review(YOU, "trip-g", { kind: "event", id: "g-show1" }, 1); // someone else's
+  await review(ME, "trip-notmine", { kind: "place", id: "LIS" }, 5); // a trip they are no longer on: dropped
   await sql`insert into public.taste_prefs (user_id, card, hide) values (${ME}, ${
     sql.json({ likes: ["quiet"] })
   }::jsonb, ${["x", "y"]})`;
@@ -340,5 +341,7 @@ Deno.test("home: profile text matched to a place, with a base-place fallback", a
   assertEquals(await home(YOU), [["Atlantis", null, null]]);
   assertEquals(await home(NOBODY), [["Valencia", "ES", null]]);
   assertEquals(await home(THIRD), [["Valencia", "ES", "Europe/Madrid"]]); // no profile row: base place of the latest trip
+  await sql`update public.profiles set home_place = 'Lisbon, CA' where user_id = ${ME}`;
+  assertEquals(await home(ME), [["Lisbon", "CA", null]]); // the country written must match the place's
   await db.close();
 });

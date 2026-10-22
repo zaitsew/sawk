@@ -97,6 +97,7 @@ begin
                                            then t.doc -> 'places' else '[]'::jsonb end) p
            where jsonb_typeof(p) = 'object'
              and (lower(p ->> 'name') = lower(v_name) or lower(p ->> 'id') = lower(v_name))
+             and (v_cc is null or upper(coalesce(p ->> 'country', '')) = v_cc)
            order by t.updated_at desc
            limit 1) m on true;
     return;
@@ -273,7 +274,8 @@ declare
 begin
   if p_user is null then return v_empty; end if;
 
-  if to_regclass('public.moments') is not null and to_regclass('public.trips') is not null then
+  if to_regclass('public.moments') is not null and to_regclass('public.trips') is not null
+     and to_regclass('public.trip_members') is not null then
     execute $q$
       select coalesce(jsonb_agg(jsonb_build_object('kind', x.kind, 'key', x.key, 'rating', x.rating)), '[]'::jsonb)
         from (
@@ -309,6 +311,9 @@ begin
                  m.rating::int as rating
             from public.moments m
             join public.trips t on t.id = m.trip_id
+            -- Only trips the person is still a member of: a review they wrote on a trip
+            -- they have since left must not reveal that trip's current contents.
+            join public.trip_members tm on tm.trip_id = t.id and tm.user_id = $1
            where m.author_id = $1 and m.rating between 1 and 5
              and jsonb_typeof(m.about) = 'object'
              and m.about ->> 'kind' in ('stay', 'move', 'event', 'place')
