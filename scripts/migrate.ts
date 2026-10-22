@@ -69,7 +69,7 @@ function managementApi(ref: string, token: string): Runner {
 }
 
 async function runner(): Promise<Runner> {
-  const url = Deno.env.get("DATABASE_URL");
+  const url = Deno.env.get("DATABASE_URL") ?? Deno.env.get("SUPABASE_DB_URL");
   if (url) return direct(url);
   const ref = Deno.env.get("SUPABASE_PROJECT_REF");
   if (ref) {
