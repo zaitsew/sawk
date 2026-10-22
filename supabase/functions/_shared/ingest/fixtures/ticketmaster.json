@@ -1,0 +1,195 @@
+{
+  "_embedded": {
+    "events": [
+      {
+        "name": "Fixture Band Live",
+        "id": "tm1",
+        "url": "https://www.ticketmaster.example/event/tm1",
+        "locale": "es-es",
+        "info": "All ages.",
+        "images": [
+          {
+            "ratio": "16_9",
+            "url": "https://img.example/small.jpg",
+            "width": 305,
+            "height": 225
+          },
+          {
+            "ratio": "16_9",
+            "url": "https://img.example/mid.jpg",
+            "width": 1024,
+            "height": 576
+          },
+          {
+            "ratio": "3_2",
+            "url": "https://img.example/big.jpg",
+            "width": 2048,
+            "height": 1365
+          }
+        ],
+        "dates": {
+          "start": {
+            "localDate": "2026-11-12",
+            "localTime": "21:00:00",
+            "dateTime": "2026-11-12T20:00:00Z"
+          },
+          "timezone": "Europe/Madrid",
+          "status": {
+            "code": "onsale"
+          }
+        },
+        "classifications": [
+          {
+            "primary": true,
+            "segment": {
+              "name": "Music"
+            },
+            "genre": {
+              "name": "Rock"
+            },
+            "subGenre": {
+              "name": "Indie Rock"
+            }
+          }
+        ],
+        "priceRanges": [
+          {
+            "type": "standard",
+            "currency": "EUR",
+            "min": 25.0,
+            "max": 60.0
+          }
+        ],
+        "_embedded": {
+          "venues": [
+            {
+              "name": "Arena Prueba",
+              "timezone": "Europe/Madrid",
+              "city": {
+                "name": "València"
+              },
+              "country": {
+                "countryCode": "ES"
+              },
+              "postalCode": "46013",
+              "address": {
+                "line1": "Calle Arena 12"
+              },
+              "location": {
+                "longitude": "-0.3661",
+                "latitude": "39.4495"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Fixture FC vs Test United",
+        "id": "tm2",
+        "url": "https://www.ticketmaster.example/event/tm2",
+        "dates": {
+          "start": {
+            "localDate": "2026-11-15",
+            "localTime": "16:15:00",
+            "dateTime": "2026-11-15T15:15:00Z"
+          },
+          "status": {
+            "code": "cancelled"
+          }
+        },
+        "classifications": [
+          {
+            "primary": true,
+            "segment": {
+              "name": "Sports"
+            },
+            "genre": {
+              "name": "Football"
+            }
+          }
+        ],
+        "_embedded": {
+          "venues": [
+            {
+              "name": "Estadio Prueba",
+              "city": {
+                "name": "Valencia"
+              },
+              "country": {
+                "countryCode": "ES"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Comedy Evening",
+        "id": "tm3",
+        "url": "https://www.ticketmaster.example/event/tm3",
+        "dates": {
+          "start": {
+            "localDate": "2026-12-01",
+            "timeTBA": true
+          },
+          "timezone": "Europe/Madrid",
+          "status": {
+            "code": "onsale"
+          }
+        },
+        "classifications": [
+          {
+            "primary": true,
+            "segment": {
+              "name": "Arts & Theatre"
+            },
+            "genre": {
+              "name": "Comedy"
+            }
+          }
+        ],
+        "_embedded": {
+          "venues": [
+            {
+              "name": "Teatro Prueba",
+              "city": {
+                "name": "Valencia"
+              },
+              "country": {
+                "countryCode": "ES"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Postponed Show",
+        "id": "tm4",
+        "url": "https://www.ticketmaster.example/event/tm4",
+        "dates": {
+          "start": {
+            "dateTBA": true
+          },
+          "status": {
+            "code": "postponed"
+          }
+        },
+        "_embedded": {
+          "venues": [
+            {
+              "name": "Arena Prueba",
+              "city": {
+                "name": "Valencia"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "page": {
+    "size": 200,
+    "totalElements": 4,
+    "totalPages": 1,
+    "number": 0
+  }
+}

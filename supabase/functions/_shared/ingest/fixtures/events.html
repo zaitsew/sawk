@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Agenda de prueba</title>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+  {"@type":"Organization","name":"Fixture Venue","url":"https://venue.fixture.test/"},
+  {"@type":"WebSite","name":"Fixture Venue","url":"https://venue.fixture.test/"},
+  {"@type":"MusicEvent","name":"Caf&eacute; &amp; Jazz Trio","startDate":"2026-10-25T20:30:00+01:00","endDate":"2026-10-25T22:30:00+01:00",
+   "url":"/events/cafe-jazz","image":["/img/jazz.jpg"],"description":"<p>Three musicians.</p><p>Doors at 20:00.</p>",
+   "location":{"@type":"Place","name":"Blue Room","address":{"@type":"PostalAddress","streetAddress":"Carrer de Prova 1","postalCode":"46001","addressLocality":"València","addressCountry":"ES"},"geo":{"@type":"GeoCoordinates","latitude":"39.47","longitude":"-0.37"}},
+   "offers":{"@type":"Offer","price":"12,50","priceCurrency":"EUR","url":"https://tickets.fixture.test/jazz"}},
+  {"@type":"ExhibitionEvent","name":"Light and Shadow","startDate":"2026-10-01","endDate":"2026-12-31","url":"https://venue.fixture.test/exhibitions/light",
+   "location":{"@type":"Place","name":"Museo Prueba","address":"Calle Museo 3, Valencia"},"isAccessibleForFree":true},
+  {"@type":["Event","SocialEvent"],"name":"Called Off Party","startDate":"2026-10-30T22:00:00","eventStatus":"https://schema.org/EventCancelled",
+   "location":{"@type":"Place","name":"Sala Prueba"}}
+]}
+</script>
+<script type="application/ld+json">
+[{"@context":"https://schema.org","@type":"ItemList","itemListElement":[
+  {"@type":"ListItem","position":1,"item":{"@type":"TheaterEvent","name":"Hamlet in a Box","startDate":"2026-11-07T19:00","location":{"@type":"Place","name":"Teatro Prueba","address":{"@type":"PostalAddress","addressLocality":"Valencia"}},
+   "offers":[{"@type":"Offer","lowPrice":"10","highPrice":"25","priceCurrency":"EUR"}]}},
+  {"@type":"ListItem","position":2,"item":{"@type":"Event","name":"Webinar: Remote Everything","startDate":"2026-11-08T17:00:00Z","eventAttendanceMode":"https://schema.org/OnlineEventAttendanceMode","location":{"@type":"VirtualLocation","url":"https://zoom.example.test/1"}}},
+  {"@type":"ListItem","position":3,"item":{"@type":"SportsEvent","name":"Valencia Basket vs Test BC @ Pabellon Prueba","startDate":"2026-11-14T18:30:00+01:00","location":{"@type":"Place","name":"Pabellon Prueba","address":{"@type":"PostalAddress","addressLocality":"Valencia"}}}},
+  {"@type":"ListItem","position":4,"item":{"@type":"Event","name":"Madrid Only Show","startDate":"2026-11-20T21:00:00+01:00","location":{"@type":"Place","name":"Sala Madrid","address":{"@type":"PostalAddress","addressLocality":"Madrid","addressCountry":"ES"}}}}
+]}]
+</script>
+<script type="application/ld+json">{ this is not json }</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FoodEvent","name":"Paella Workshop","startDate":"2026-11-10T12:00:00Z","endDate":"2025-01-01T00:00:00Z",
+ "description":"Learn to cook paella.
+Bring an apron.","location":"Carrer de Prova 9, Valencia"}
+</script>
+</head><body><h1>Agenda</h1></body></html>
