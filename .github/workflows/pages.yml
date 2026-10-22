@@ -1,0 +1,50 @@
+name: pages
+
+# Deploys web/ to https://zaitsew.github.io/sawk/ on a push to main that touches it.
+# Ubuntu only, 10 minutes at most (docs/POLICY: no macOS runners, no CI on pull requests).
+# The two VITE_ values are public by design; they are repo *variables*, not secrets.
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build
+        working-directory: web
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          # Optional: set to 1 once https://zaitsew.github.io/sawk/ is in the project's redirect allow-list.
+          VITE_SAWK_OAUTH: ${{ vars.VITE_SAWK_OAUTH }}
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
