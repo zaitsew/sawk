@@ -102,42 +102,46 @@ export async function profile(ctx: Ctx, args: unknown): Promise<Profile> {
   const unknown = Object.keys(set).filter((k) => !known.includes(k));
   if (unknown.length) throw bad(`unknown profile field(s): ${unknown.join(", ")}. Fields: ${known.join(", ")}`);
 
-  const cur = await getProfile(ctx.sql, ctx.userId);
-  const next: Profile = { ...cur };
-  const has = (k: string) => k in set;
-  if (has("homeCity")) next.homeCity = set.homeCity === null ? null : reqStr(set, "homeCity", 100);
-  if (has("homeCountry")) next.homeCountry = set.homeCountry === null ? null : (optCountry(set, "homeCountry") ?? null);
-  if (has("homeTz")) next.homeTz = set.homeTz === null ? null : (optTz(set, "homeTz") ?? null);
-  if (has("langs")) next.langs = strList(set.langs, "langs", 30, 40);
-  if (has("likes")) next.likes = strList(set.likes, "likes", 30, 40);
-  if (has("avoids")) next.avoids = strList(set.avoids, "avoids", 30, 40);
-  if (has("notes")) {
-    if (typeof set.notes !== "string") throw bad("notes must be a string");
-    if (set.notes.length > 2000) throw bad("notes is longer than 2000 characters");
-    next.notes = set.notes.trim();
-  }
-  if (has("priceMax")) next.priceMax = set.priceMax === null ? null : (optNum(set, "priceMax", 0, 1_000_000) ?? null);
-  if (has("currency")) {
-    const c = optStr(set, "currency", 3);
-    if (!c || !/^[A-Za-z]{3}$/.test(c)) throw bad("currency must be a 3-letter code like EUR");
-    next.currency = c.toUpperCase();
-  }
-  if (has("maxPerDay")) next.maxPerDay = optInt(set, "maxPerDay", 1, 10) ?? cur.maxPerDay;
+  return await ctx.sql.begin(async (tx) => {
+    // Lock the row so two partial updates (likes from one client, priceMax from another) both land.
+    await tx`insert into sawk.profiles (user_id) values (${ctx.userId}::uuid) on conflict (user_id) do nothing`;
+    const cur = rowToProfile((await tx`select * from sawk.profiles where user_id = ${ctx.userId}::uuid for update`)[0]);
+    const next: Profile = { ...cur };
+    const has = (k: string) => k in set;
+    if (has("homeCity")) next.homeCity = set.homeCity === null ? null : reqStr(set, "homeCity", 100);
+    if (has("homeCountry")) next.homeCountry = set.homeCountry === null ? null : (optCountry(set, "homeCountry") ?? null);
+    if (has("homeTz")) next.homeTz = set.homeTz === null ? null : (optTz(set, "homeTz") ?? null);
+    if (has("langs")) next.langs = strList(set.langs, "langs", 30, 40);
+    if (has("likes")) next.likes = strList(set.likes, "likes", 30, 40);
+    if (has("avoids")) next.avoids = strList(set.avoids, "avoids", 30, 40);
+    if (has("notes")) {
+      if (typeof set.notes !== "string") throw bad("notes must be a string");
+      if (set.notes.length > 2000) throw bad("notes is longer than 2000 characters");
+      next.notes = set.notes.trim();
+    }
+    if (has("priceMax")) next.priceMax = set.priceMax === null ? null : (optNum(set, "priceMax", 0, 1_000_000) ?? null);
+    if (has("currency")) {
+      const c = optStr(set, "currency", 3);
+      if (!c || !/^[A-Za-z]{3}$/.test(c)) throw bad("currency must be a 3-letter code like EUR");
+      next.currency = c.toUpperCase();
+    }
+    if (has("maxPerDay")) next.maxPerDay = optInt(set, "maxPerDay", 1, 10) ?? cur.maxPerDay;
 
-  const rows = await ctx.sql`
-    insert into sawk.profiles (user_id, home_city, home_country, home_tz, langs, likes, avoids, notes, price_max, currency, max_per_day, updated_at)
-    values (${ctx.userId}::uuid, ${next.homeCity}::text, ${next.homeCountry}::text, ${next.homeTz}::text,
-            ${ctx.sql.array(next.langs)}::text[], ${ctx.sql.array(next.likes)}::text[], ${
-    ctx.sql.array(next.avoids)
-  }::text[],
-            ${next.notes}::text, ${next.priceMax}::numeric, ${next.currency}::text, ${next.maxPerDay}::smallint, ${ctx.now().toISOString()}::timestamptz)
-    on conflict (user_id) do update set
-      home_city = excluded.home_city, home_country = excluded.home_country, home_tz = excluded.home_tz,
-      langs = excluded.langs, likes = excluded.likes, avoids = excluded.avoids, notes = excluded.notes,
-      price_max = excluded.price_max, currency = excluded.currency, max_per_day = excluded.max_per_day,
-      updated_at = excluded.updated_at
-    returning *`;
-  return rowToProfile(rows[0]);
+    const rows = await tx`
+      insert into sawk.profiles (user_id, home_city, home_country, home_tz, langs, likes, avoids, notes, price_max, currency, max_per_day, updated_at)
+      values (${ctx.userId}::uuid, ${next.homeCity}::text, ${next.homeCountry}::text, ${next.homeTz}::text,
+              ${tx.array(next.langs)}::text[], ${tx.array(next.likes)}::text[], ${
+      tx.array(next.avoids)
+    }::text[],
+              ${next.notes}::text, ${next.priceMax}::numeric, ${next.currency}::text, ${next.maxPerDay}::smallint, ${ctx.now().toISOString()}::timestamptz)
+      on conflict (user_id) do update set
+        home_city = excluded.home_city, home_country = excluded.home_country, home_tz = excluded.home_tz,
+        langs = excluded.langs, likes = excluded.likes, avoids = excluded.avoids, notes = excluded.notes,
+        price_max = excluded.price_max, currency = excluded.currency, max_per_day = excluded.max_per_day,
+        updated_at = excluded.updated_at
+      returning *`;
+    return rowToProfile(rows[0]);
+  });
 }
 
 // MARK: - runs
@@ -296,8 +300,9 @@ export async function feed(ctx: Ctx, args: unknown) {
     where f.user_id = ${ctx.userId}::uuid
       and not e.cancelled
       and (e.starts_at at time zone coalesce(e.tz, ${tz}::text))::date between ${from}::date and ${to}::date
-      and (case when e.all_day then (e.starts_at at time zone coalesce(e.tz, ${tz}::text))::date >= ${today}::date
-                else coalesce(e.ends_at, e.starts_at) >= ${now.toISOString()}::timestamptz - interval '3 hours' end)
+      and (f.state in ('saved', 'going', 'went')
+           or case when e.all_day then (e.starts_at at time zone coalesce(e.tz, ${tz}::text))::date >= ${today}::date
+                   else coalesce(e.ends_at, e.starts_at) >= ${now.toISOString()}::timestamptz - interval '3 hours' end)
       and (${city}::text is null or lower(e.city) = lower(${city}::text))
       and (case when ${state}::text is null then f.state <> 'hidden' else f.state = ${state}::text end)
     order by (e.starts_at at time zone coalesce(e.tz, ${tz}::text))::date, f.score desc, e.starts_at
@@ -341,17 +346,16 @@ export async function feedback(ctx: Ctx, args: unknown): Promise<FeedItem> {
       rating ?? null
     }::smallint, ${note}::text, ${via}, ${ctx.now().toISOString()}::timestamptz)`;
 
-    let cur =
+    // Acting on an event nobody ranked for this person (they added it themselves): give it a row.
+    // `do nothing` keeps a row a ranker inserted meanwhile; the lock below then reads it.
+    await tx`
+      insert into sawk.feed (user_id, event_id, score, reason, ranked_by)
+      values (${ctx.userId}::uuid, ${eventId}, 0.5, 'You added this yourself.', 'person')
+      on conflict (user_id, event_id) do nothing`;
+    const cur =
       (await tx`select state, rating from sawk.feed where user_id = ${ctx.userId}::uuid and event_id = ${eventId} for update`)[
         0
       ];
-    if (!cur) {
-      // Acting on an event nobody ranked for this person (they added it themselves): give it a row.
-      await tx`
-        insert into sawk.feed (user_id, event_id, score, reason, ranked_by)
-        values (${ctx.userId}::uuid, ${eventId}, 0.5, 'You added this yourself.', 'person')`;
-      cur = { state: "new", rating: null };
-    }
     let state = cur.state as FeedState;
     let newRating = cur.rating == null ? null : Number(cur.rating);
     if (action === "rate") {

@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert@1";
 import { addEvents, listEvents, validateEvent } from "./events.ts";
 import { runStart } from "./core.ts";
-import { ev, inHours, setup, USER_A, USER_B } from "./testkit.ts";
+import { ev, inHours, setup, USER_A, USER_B, ymd } from "./testkit.ts";
 import { AppError } from "./util.ts";
 
 const start = async (s: Awaited<ReturnType<typeof setup>>, user = USER_A) =>
@@ -231,5 +231,16 @@ Deno.test("events: the pool in a city and range, case-insensitive, with the call
     0.1,
   );
   assertNotEquals(ids[0], ids[1]);
+  await s.close();
+});
+
+Deno.test("add_events: the id uses the written offset's day when tz is missing", async () => {
+  const s = await setup();
+  const runId = await start(s);
+  const startsAt = `${ymd(3)}T00:30:00+02:00`; // 22:30 UTC the day before
+  const a = await addEvents(s.ctx(), { runId, events: [ev("Late show", { startsAt, tz: undefined })] });
+  const b = await addEvents(s.ctx(), { runId, events: [ev("Late show", { startsAt, tz: "Etc/GMT-2" })] });
+  assertEquals([a.added, b.added, b.updated], [1, 0, 1]);
+  assertEquals(a.ids, b.ids);
   await s.close();
 });

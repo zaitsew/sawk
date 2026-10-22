@@ -30,6 +30,8 @@ const WITH_OFFSET = /(Z|[+-]\d{2}:?\d{2})$/i;
 
 export interface Valid extends Required<Pick<EventIn, "title" | "city" | "url">> {
   startsAt: string;
+  /** startsAt as the caller wrote it, offset kept: the event id needs its local day when tz is missing. */
+  startsAtWritten: string;
   endsAt: string | null;
   allDay: boolean;
   tz: string | null;
@@ -131,6 +133,7 @@ export function validateEvent(input: unknown, now: Date): Valid {
     city,
     url,
     startsAt,
+    startsAtWritten: (o.startsAt as string).trim(),
     endsAt,
     allDay: o.allDay === true,
     tz,
@@ -174,7 +177,7 @@ export async function addEvents(ctx: Ctx, args: unknown): Promise<AddResult> {
   for (let index = 0; index < a.events.length; index++) {
     try {
       const e = validateEvent(a.events[index], now);
-      valid.push({ index, id: await eventId(e), e });
+      valid.push({ index, id: await eventId({ ...e, startsAt: e.startsAtWritten }), e });
     } catch (err) {
       if (err instanceof AppError) rejected.push({ index, why: err.message });
       else throw err;

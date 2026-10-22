@@ -188,6 +188,9 @@ Deno.test("feed: filters (hidden, cancelled, past, range, city, state), order an
   assert(!def.includes("Hidden one"), "hidden is excluded");
   assert(!def.includes("Cancelled one"), "cancelled is excluded");
   assert(!def.includes("Long over") && !def.includes("Ended already"), "past is excluded");
+  // A past event the person saved stays, so the feed can ask "How was it?".
+  await core.feedback(s.ctx(), { eventId: byTitle["Long over"], action: "save" });
+  assert((await titles({ from: ymd(-1) })).includes("Long over"), "a saved past event stays");
   assert(!def.includes("Next month"), "default range is 14 days");
   assert(def.indexOf("Tomorrow high") < def.indexOf("Tomorrow low"), "within a day, best score first");
   assert(
@@ -455,5 +458,25 @@ Deno.test("context: no home city says how to set it; history and last runs are t
   const b = await core.context(s.ctx(USER_B), {}) as any;
   assertEquals(b.history, { counts: {}, recent: [] });
   assertEquals(b.lastRuns, []);
+  await s.close();
+});
+
+Deno.test("profile: two partial updates both land", async () => {
+  const s = await setup();
+  await Promise.all([
+    core.profile(s.ctx(), { set: { likes: ["jazz"] } }),
+    core.profile(s.ctx(), { set: { priceMax: 30 } }),
+  ]);
+  const p = await core.profile(s.ctx(), {});
+  assertEquals([p.likes, p.priceMax], [["jazz"], 30]);
+  await s.close();
+});
+
+Deno.test("feedback: a feed row a ranker wrote first is kept, not duplicated", async () => {
+  const s = await setup();
+  const { runId, ids } = await seed(s);
+  await core.rank(s.ctx(), { runId, items: [{ eventId: ids[0], score: 0.8, reason: "Agent pick." }] });
+  const item = await core.feedback(s.ctx(), { eventId: ids[0], action: "save" });
+  assertEquals([item.state, item.score, item.reason], ["saved", 0.8, "Agent pick."]);
   await s.close();
 });
