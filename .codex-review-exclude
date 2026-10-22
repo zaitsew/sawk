@@ -2,3 +2,4 @@
 deno.lock
 web/docs/screens
 web/package-lock.json
+supabase/functions/_shared/ingest/fixtures
