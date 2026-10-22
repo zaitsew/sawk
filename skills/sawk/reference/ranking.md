@@ -25,7 +25,7 @@ Spread the scores. If everything is 0.6 to 0.8 the ranking says nothing.
 5. **Language**: an event in a language not in `profile.langs` minus 0.2 unless the category does not
    depend on language (music, dance, exhibitions).
 6. **Diversity**: within one day, order by score; from the second event of the same category, minus
-   0.1 each. Never let more events than `profile.max_per_day` stay at 0.7 or above on one day.
+   0.1 each. Never let more events than `profile.maxPerDay` stay at 0.7 or above on one day.
 
 ## Reasons
 

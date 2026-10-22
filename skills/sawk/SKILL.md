@@ -32,8 +32,8 @@ status `partial`. Do not ask questions; nobody is there.
 
 1. **Start.** `sawk_run_start({agent, model})`. `agent` is your harness (`claude-code`, `codex`,
    `chatgpt`, `grok`, `claude-desktop`), `model` is your model name. Keep the `runId`.
-2. **Context.** `sawk_context({days: 21})`. Read: `profile` (`likes`, `avoids`, `notes`, `langs`, `price_max`,
-   `max_per_day`; key spelling may be camelCase), `windows` (home, then trips; each has `city`, `country`, `tz`, `from`, `to`), `busy`,
+2. **Context.** `sawk_context({days: 21})`. Read: `profile` (`likes`, `avoids`, `notes`, `langs`, `priceMax`,
+   `maxPerDay`), `windows` (home, then trips; each has `city`, `country`, `tz`, `from`, `to`), `busy`,
    `taste`, `history`, `sources`, `pool`, `lastRuns`. If `windows` is empty, finish `failed` with the
    note "no windows".
 3. **Search, window by window.** Home window first, limited to the next 14 days; then trips by start
@@ -63,7 +63,7 @@ status `partial`. Do not ask questions; nobody is there.
    the short form:
    - Score 0..1. 0.9 and up: made for them (a strong like and it fits their schedule). 0.7: good fit.
      0.5: plausible. Below 0.3: conflicts with an avoid, a busy day, or the price cap.
-   - Diversity: do not let one category fill a day; respect `profile.max_per_day`. Lower the third and
+   - Diversity: do not let one category fill a day; respect `profile.maxPerDay`. Lower the third and
      later event of a category on the same day.
    - Schedule: lower events on `busy` days and on travel days; lower a late night before an early
      departure.

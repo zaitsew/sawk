@@ -19,7 +19,7 @@ Rules
 
 Steps
 1. Call sawk_run_start with agent="chatgpt" (or "grok") and your model name. Keep runId.
-2. Call sawk_context with days=21. Read my profile (likes, avoids, notes, langs, price_max, max_per_day),
+2. Call sawk_context with days=21. Read my profile (likes, avoids, notes, langs, priceMax, maxPerDay),
    windows (my home city first, then trips), busy days, history, sources and the known pool.
 3. For each window, home (next 14 days) first, then trips by date:
    - Open the "web" sources listed for that city.
@@ -36,7 +36,7 @@ Steps
 5. Rank EVERY candidate with sawk_rank (up to 200 per call), score 0 to 1:
    0.9+ made for me (strong like and I'm free); 0.7 good fit; 0.5 plausible; below 0.3 conflicts with an
    avoid, a busy day, a travel day or my price cap. Mix categories within a day and keep to my
-   max_per_day. Lower things like what I hid; raise things like what I rated high, saved or went to.
+   maxPerDay. Lower things like what I hid; raise things like what I rated high, saved or went to.
    Reason: ONE sentence to me ("you"), at most 200 characters, specific to me and this event,
    never generic.
 6. Call sawk_run_finish with status ok, partial or failed, and notes (what was searched, what failed).
