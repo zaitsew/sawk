@@ -86,7 +86,8 @@ async function setup() {
 
 Deno.test("ingest: events from two sources, deduped; a failing source and a missing key do not stop the run", async () => {
   const { sql, close, ids, f } = await setup();
-  const out = (await runIngest(sql, { now: NOW, fetch: f, env: () => undefined, politeDelayMs: 0 }))!;
+  const out =
+    (await runIngest(sql, { now: NOW, fetch: f, env: () => undefined, politeDelayMs: 0, allowHost: () => true }))!;
 
   const byId = Object.fromEntries(out.sources.map((s) => [s.id, s]));
   assertEquals(Object.keys(byId).sort(), [ids.ics, ids.ld, ids.tm, ids.bad].sort()); // web and inactive are not read
@@ -133,7 +134,8 @@ Deno.test("ingest: events from two sources, deduped; a failing source and a miss
 
 Deno.test("ingest: the fallback rank fills the feed, and a second run keeps an agent's rank and the person's state", async () => {
   const { sql, close, f } = await setup();
-  const first = (await runIngest(sql, { now: NOW, fetch: f, env: () => undefined, politeDelayMs: 0 }))!;
+  const first =
+    (await runIngest(sql, { now: NOW, fetch: f, env: () => undefined, politeDelayMs: 0, allowHost: () => true }))!;
   assertEquals([first.rankedUsers, first.ranked], [1, 3]);
   const feed =
     await sql`select e.title, f.ranked_by, f.score, f.reason from sawk.feed f join sawk.events e on e.id = f.event_id
@@ -153,6 +155,7 @@ Deno.test("ingest: the fallback rank fills the feed, and a second run keeps an a
     fetch: f,
     env: () => undefined,
     politeDelayMs: 0,
+    allowHost: () => true,
   }))!;
   assertEquals(second.eventsAdded, 0);
   const [mine] =
@@ -179,6 +182,7 @@ Deno.test("ingest: one source by id; an unknown or non-machine source is null; r
     fetch: f,
     env: () => undefined,
     politeDelayMs: 0,
+    allowHost: () => true,
     sourceId: ids.ics,
     rank: false,
   }))!;
@@ -210,6 +214,7 @@ Deno.test("ingest: with a Ticketmaster key the API source is read", async () => 
     fetch: f,
     env: (k) => (k === "TICKETMASTER_API_KEY" ? "k" : undefined),
     politeDelayMs: 0,
+    allowHost: () => true,
     sourceId: ids.tm,
   }))!;
   assertEquals([out.status, out.eventsAdded], ["ok", 1]);
@@ -220,8 +225,51 @@ Deno.test("ingest: with a Ticketmaster key the API source is read", async () => 
 Deno.test("ingest: all sources failing is a failed run", async () => {
   const { sql, close, ids } = await setup();
   const f = fakeFetch({});
-  const out = (await runIngest(sql, { now: NOW, fetch: f, politeDelayMs: 0, sourceId: ids.bad }))!;
+  const out =
+    (await runIngest(sql, { now: NOW, fetch: f, politeDelayMs: 0, allowHost: () => true, sourceId: ids.bad }))!;
   assertEquals(out.status, "failed");
   assertEquals((await sql`select status from sawk.runs`)[0].status, "failed");
+  await close();
+});
+
+Deno.test("ingest: a source on a host outside the allow-list is skipped, not failed, and never fetched", async () => {
+  const { sql, close, ids } = await setup();
+  const [odd] = await sql`insert into sawk.sources (city, country, kind, url, label)
+                          values ('Valencia', 'ES', 'ics', 'https://odd.example/feed.ics', 'Somewhere else') returning id`;
+  const f = fakeFetch({ "https://odd.example/feed.ics": { body: ICS, type: "text/calendar" } });
+  // The default allow-list, as in production.
+  const out = (await runIngest(sql, {
+    now: NOW,
+    fetch: f,
+    env: () => undefined,
+    politeDelayMs: 0,
+    rank: false,
+    sourceId: odd.id as string,
+  }))!;
+  assertEquals(out.sources[0].skipped, true);
+  assertEquals(out.sources[0].error, "host not on the ingest allow-list (agents can still read it)");
+  assertEquals(f.calls, []);
+  assertEquals(out.status, "ok"); // a skipped source does not make the run partial or failed
+  const [row] = await sql`select last_ok_at, last_error from sawk.sources where id = ${odd.id as string}::uuid`;
+  assertEquals([row.last_ok_at, row.last_error], [
+    null,
+    "host not on the ingest allow-list (agents can still read it)",
+  ]);
+  // The seeded kind of host passes the default list.
+  const listed = (await sql`insert into sawk.sources (city, country, kind, url, label)
+                            values ('Valencia', 'ES', 'ics', 'https://www.meetup.com/x/events/ical/', 'Listed') returning id`)[
+    0
+  ].id as string;
+  const g = fakeFetch({ "https://www.meetup.com/x/events/ical/": { body: ICS, type: "text/calendar" } });
+  const ok = (await runIngest(sql, {
+    now: NOW,
+    fetch: g,
+    env: () => undefined,
+    politeDelayMs: 0,
+    rank: false,
+    sourceId: listed,
+  }))!;
+  assertEquals([ok.sources[0].skipped, ok.sources[0].error, ok.eventsAdded], [undefined, undefined, 2]);
+  void ids;
   await close();
 });

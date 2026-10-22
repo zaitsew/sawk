@@ -4,6 +4,7 @@
 import type { Sql } from "../_shared/db.ts";
 import { ADAPTERS, MACHINE_KINDS } from "../_shared/ingest/adapters.ts";
 import { finalizeEvents } from "../_shared/ingest/normalize.ts";
+import { hostAllowed, hostOf as hostnameOf, NOT_ALLOWED } from "../_shared/ingest/hosts.ts";
 import { guardedFetch } from "../_shared/ingest/ssrf.ts";
 import type { Fetch, SourceRow } from "../_shared/ingest/types.ts";
 import { upsertEvents } from "../_shared/ingest/upsert.ts";
@@ -15,6 +16,8 @@ export interface IngestOptions {
   env?: (name: string) => string | undefined;
   /** Ingest only this source. */
   sourceId?: string;
+  /** Which hosts a source may be read from. Default: the ingest allow-list (hosts.ts). Tests that stub fetch widen it. */
+  allowHost?: (host: string) => boolean;
   /** Write the fallback rank after ingesting. Default true. */
   rank?: boolean;
   /** Sources on one host run one after another, this far apart. Default 1000 ms. */
@@ -58,7 +61,8 @@ const hostOf = (s: SourceRow) => (s.kind === "ticketmaster" ? "app.ticketmaster.
 export async function runIngest(sql: Sql, opts: IngestOptions = {}): Promise<IngestSummary | null> {
   const now = opts.now ?? new Date();
   // The real fetch only reaches public addresses (ssrf.ts). A fetch passed in by a test is used as it is.
-  const f = opts.fetch ?? guardedFetch(fetch);
+  const allowHost = opts.allowHost ?? ((h: string) => hostAllowed(h));
+  const f = opts.fetch ?? guardedFetch(fetch, undefined, allowHost);
   const env = opts.env ?? ((k: string) => Deno.env.get(k));
   const delay = opts.politeDelayMs ?? 1000;
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -106,20 +110,28 @@ export async function runIngest(sql: Sql, opts: IngestOptions = {}): Promise<Ing
       updated: 0,
     };
     summaries.set(source.id, summary);
-    try {
-      const adapter = ADAPTERS[source.kind];
-      const res = await adapter(source, { fetch: f, now, env, cache });
-      const fin = await finalizeEvents(res.events, source, now);
-      summary.events = fin.events.length;
-      if (res.error === "no key" && !fin.events.length) {
-        summary.skipped = true;
-        summary.error = res.error;
-      } else if (res.error) summary.error = res.error;
-      const up = await serial(() => upsertEvents(sql, fin.events, `${source.kind}:${source.id}`, now));
-      summary.added = up.added;
-      summary.updated = up.updated;
-    } catch (e) {
-      summary.error = `${source.kind}: ${(e as Error).message}`;
+    // Ticketmaster is always app.ticketmaster.com; the others read the row's own URL.
+    const host = source.kind === "ticketmaster" ? "app.ticketmaster.com" : hostnameOf(source.url);
+    if (!host || !allowHost(host)) {
+      // Skipped, not failed: agents can still read the page. It does not make the run partial.
+      summary.skipped = true;
+      summary.error = NOT_ALLOWED;
+    } else {
+      try {
+        const adapter = ADAPTERS[source.kind];
+        const res = await adapter(source, { fetch: f, now, env, cache });
+        const fin = await finalizeEvents(res.events, source, now);
+        summary.events = fin.events.length;
+        if (res.error === "no key" && !fin.events.length) {
+          summary.skipped = true;
+          summary.error = res.error;
+        } else if (res.error) summary.error = res.error;
+        const up = await serial(() => upsertEvents(sql, fin.events, `${source.kind}:${source.id}`, now));
+        summary.added = up.added;
+        summary.updated = up.updated;
+      } catch (e) {
+        summary.error = `${source.kind}: ${(e as Error).message}`;
+      }
     }
     const failed = !!summary.error && !summary.skipped;
     await sql`

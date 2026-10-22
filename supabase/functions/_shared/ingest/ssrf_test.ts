@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { checkUrl, guardedFetch, isPrivateIp, MAX_REDIRECTS } from "./ssrf.ts";
+import { hostAllowed } from "./hosts.ts";
 
 Deno.test("private, loopback, link-local and reserved addresses are recognised", () => {
   for (
@@ -97,4 +98,25 @@ Deno.test("a redirect loop ends", async () => {
       Promise.resolve(new Response(null, { status: 302, headers: { location: url } }))) as unknown as typeof fetch;
   const f = guardedFetch(inner, () => Promise.resolve(["93.184.216.34"]));
   await assertRejects(() => f("https://a.example/loop"), Error, `more than ${MAX_REDIRECTS}`);
+});
+
+Deno.test("allow-list: a host that is not listed is refused before it is resolved, and so is a redirect to one", async () => {
+  const seen: string[] = [];
+  const resolved: string[] = [];
+  const inner = ((url: string) => {
+    seen.push(url);
+    if (url === "https://www.meetup.com/g/events/ical/") {
+      return Promise.resolve(
+        new Response(null, { status: 302, headers: { location: "https://elsewhere.example/feed.ics" } }),
+      );
+    }
+    return Promise.resolve(new Response("ok"));
+  }) as unknown as typeof fetch;
+  const f = guardedFetch(inner, (h) => (resolved.push(h), Promise.resolve(["93.184.216.34"])), (h) => hostAllowed(h));
+  await assertRejects(() => f("https://other.example/feed.ics"), Error, "not on the ingest allow-list");
+  assertEquals([seen, resolved], [[], []]); // not fetched, not even resolved
+  assertEquals(await (await f("https://www.eventbrite.es/d/x/")).text(), "ok");
+  // A listed host that redirects off the list is stopped at the second hop.
+  await assertRejects(() => f("https://www.meetup.com/g/events/ical/"), Error, "elsewhere.example");
+  assertEquals(seen.includes("https://elsewhere.example/feed.ics"), false);
 });

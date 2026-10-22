@@ -32,7 +32,12 @@ Rules every adapter shares:
   `UNTIL`, `BYDAY`, `BYMONTHDAY`, `EXDATE`, overrides, cancellations) expand
   for the next 60 days. Any other rule is read as a single event.
 - Online-only events are dropped. A cancelled event is kept only if it was
-  already known, and is hidden from the feed.
+  already known, and is hidden from the feed. An `EXDATE` inside the 60-day
+  window is emitted as a cancelled occurrence, so a row imported earlier is
+  marked. The source that cancelled an event is recorded in the event's `seen`
+  list, and only that source can un-cancel it.
+- Rows are read again with a lock just before they are merged, so a field an
+  agent filled in meanwhile is merged, never overwritten.
 - A failing source records its error and does not stop the run. A run is
   `failed` only when every attempted source failed.
 
@@ -44,15 +49,40 @@ Politeness and safety:
 - `jsonld` pages are fetched only if the host's `robots.txt` allows the path
   (RFC 9309: our own `sawk` group, else `*`; longest match wins). A 4xx answer
   for `robots.txt` allows; a 5xx or network error skips the page for that run.
-- The ingest fetch refuses anything that is not a public http(s) address:
-  localhost and internal names, private, loopback and link-local IP literals,
-  and names that resolve to such addresses. Redirects are followed by hand, at
-  most 5, and every hop is checked. Known gap: the name is resolved once for
-  the check and once by `fetch`, so DNS rebinding is not fully closed. The
-  ingest only reads and sends no credentials.
+- **The ingest reads only from an allow-list of hosts** (`INGEST_HOSTS` in
+  `supabase/functions/_shared/ingest/hosts.ts`). Source rows are shared and
+  anyone can add one, so the daily job does not fetch whatever a row says.
+  A listed domain covers its subdomains; `evilmeetup.com` and
+  `meetup.com.evil.test` do not match. Every redirect hop is checked against the
+  list too. A machine-readable source on any other host is skipped with
+  `last_error = 'host not on the ingest allow-list (agents can still read it)'`;
+  it does not make the run partial, and agents can still read the page.
+- On top of the list, the fetch refuses anything that is not a public http(s)
+  address: localhost and internal names, private, loopback and link-local IP
+  literals, and names that resolve to such addresses. Redirects are followed by
+  hand, at most 5. The list is what closes DNS rebinding: a listed host's name
+  cannot be pointed at a private address without that host's operator.
+  The ingest only reads and sends no credentials.
 - A site's terms of service are the operator's to read. `robots.txt` permitted
   the paths below on 2026-10-23; that is not a licence to the content. Events
   keep their source URL (`url`, `seen`) and SAWk shows facts, not whole pages.
+
+### The allow-list
+
+| Domain | Used by |
+|---|---|
+| `meetup.com` | the Meetup `ics` feeds |
+| `eventbrite.es` | the Eventbrite pages |
+| `songkick.com` | Songkick pages |
+| `bandsintown.com` | Bandsintown pages |
+| `ticketmaster.es` | the Ticketmaster.es discover page |
+| `allevents.in` | AllEvents |
+| `app.ticketmaster.com` | the Ticketmaster Discovery API |
+
+To read a new site every day: check its `robots.txt` and terms, add its
+registrable domain to `INGEST_HOSTS` and to this table, add the source row, and
+add a seed or test line showing it parses. Otherwise make the row a `web` source
+and let agents read it.
 
 ## Verified on 2026-10-23
 

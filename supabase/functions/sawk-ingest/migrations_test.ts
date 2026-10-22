@@ -2,6 +2,7 @@
 
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { CATEGORIES } from "../_shared/types.ts";
+import { hostAllowed, hostOf } from "../_shared/ingest/hosts.ts";
 import { checkUrl } from "../_shared/ingest/ssrf.ts";
 import { parseTmQuery } from "../_shared/ingest/ticketmaster.ts";
 import { testDb } from "../_shared/testdb.ts";
@@ -24,6 +25,8 @@ Deno.test("seed: Valencia sources by kind, all public https pages, valid categor
     } else {
       assert((r.url as string).startsWith("https://"), r.url as string);
       assertEquals(await checkUrl(r.url as string), null);
+      // Every seeded source the ingest reads is on its allow-list; `web` rows are for agents and need not be.
+      if (r.kind !== "web") assert(hostAllowed(hostOf(r.url as string)!), `not on the allow-list: ${r.url}`);
     }
   }
   await close();

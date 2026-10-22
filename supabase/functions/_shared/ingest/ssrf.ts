@@ -103,12 +103,24 @@ export const denoResolver: Resolver | undefined = typeof Deno?.resolveDns === "f
 export const MAX_REDIRECTS = 5;
 
 /** Wraps a fetch: every hop is checked, redirects are followed here (at most 5) and never by the inner fetch. */
-export function guardedFetch(inner: Fetch, resolve: Resolver | undefined = denoResolver): Fetch {
+export function guardedFetch(
+  inner: Fetch,
+  resolve: Resolver | undefined = denoResolver,
+  allow?: (host: string) => boolean,
+): Fetch {
   return (async (input: string | URL | Request, init: RequestInit = {}) => {
     let url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      let host: string;
+      try {
+        host = new URL(url).hostname;
+      } catch {
+        throw new Error(`blocked ${url}: not a URL`);
+      }
+      // The allow-list first: a host that is not listed is never even resolved.
+      if (allow && !allow(host)) throw new Error(`blocked ${host}: not on the ingest allow-list`);
       const why = await checkUrl(url, resolve);
-      if (why) throw new Error(`blocked ${new URL(url, "http://x").host || url}: ${why}`);
+      if (why) throw new Error(`blocked ${new URL(url).host}: ${why}`);
       const res = await inner(url, { ...init, redirect: "manual" });
       const loc = res.headers.get("location");
       if (res.status >= 300 && res.status < 400 && loc) {

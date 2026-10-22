@@ -41,7 +41,7 @@ Deno.test("handler: runs, answers with the summary; a bad or unknown source id i
   const h = makeHandler({
     sql,
     secret: SECRET,
-    options: { fetch: f, politeDelayMs: 0, now: new Date("2026-10-23T10:00:00Z") },
+    options: { fetch: f, politeDelayMs: 0, allowHost: () => true, now: new Date("2026-10-23T10:00:00Z") },
   });
   const auth = { "x-sawk-cron": SECRET };
 
