@@ -107,8 +107,9 @@ category history and price cap, with `ranked_by = 'fallback'` and a plain reason
 
 ## Loco
 
-- **Reads Loco, never writes it.** `sawk.loco_windows(user)`, `sawk.loco_busy(user, from,
-  to)`, `sawk.loco_taste(user)` (`0002_loco.sql`) read trips, stays, events and moments
-  for the person's own trips. Each returns empty when Loco's tables are absent.
+- **Reads Loco, never writes it.** `sawk.loco_home(user)`, `sawk.loco_windows(user, from,
+  to)`, `sawk.loco_busy(user, from, to)`, `sawk.loco_taste(user)` (`0002_loco.sql`) read trips,
+  stays, events and moments for the person's own trips. Each returns empty when Loco's tables
+  are absent. The field list and rules are in `docs/LOCO.md`.
 - **Loco reads SAWk** through `/api/feed` with the person's Loco session (the same JWT).
   The Loco side lives in Loco's repo.
