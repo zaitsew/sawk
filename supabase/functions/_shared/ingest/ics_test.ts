@@ -57,11 +57,13 @@ Deno.test("all-day event: date-only start, exclusive end, free from the text", a
 
 Deno.test("weekly RRULE with BYDAY, EXDATE and a DST change", async () => {
   const lx = byTitle(await parsed(), "Language Exchange");
-  // Oct 20 is over; Oct 27 is the first Tuesday to come; Thu Oct 29 is excluded.
+  // Oct 20 is over; Oct 27 is the first Tuesday to come; Thu Oct 29 is excluded, so it is emitted as cancelled.
   assertEquals(lx[0].startsAt, "2026-10-27T18:00:00Z"); // 19:00 CET (DST ended Oct 25)
-  assertEquals(lx[1].startsAt, "2026-11-03T18:00:00Z");
-  assertEquals(lx[2].startsAt, "2026-11-05T18:00:00Z");
-  assert(!lx.some((e) => e.startsAt === "2026-10-29T18:00:00Z"));
+  assertEquals(lx[1].startsAt, "2026-10-29T18:00:00Z");
+  assertEquals(lx[1].cancelled, true);
+  assertEquals(lx[2].startsAt, "2026-11-03T18:00:00Z");
+  assertEquals(lx[3].startsAt, "2026-11-05T18:00:00Z");
+  assertEquals(lx.filter((e) => e.cancelled).length, 1);
   assertEquals(lx[0].venue, "Cafe Prueba");
   assertEquals(lx[0].address, "Carrer de Prova 5, Valencia");
   // Nothing past the 60-day horizon (Dec 22), and every occurrence on a Tuesday or Thursday.
@@ -69,7 +71,7 @@ Deno.test("weekly RRULE with BYDAY, EXDATE and a DST change", async () => {
     assert(Date.parse(e.startsAt) <= NOW.getTime() + 60 * 86_400_000);
     assert([2, 4].includes(new Date(e.startsAt).getUTCDay()));
   }
-  assertEquals(lx.length, 15); // 8 Tuesdays (to Dec 15) and 7 Thursdays (to Dec 17), minus Oct 29
+  assertEquals(lx.length, 16); // 8 Tuesdays (to Dec 15) and 8 Thursdays (to Dec 17), Oct 29 among them cancelled
 });
 
 Deno.test("an override replaces its occurrence; COUNT counts from DTSTART", async () => {
@@ -170,4 +172,73 @@ Deno.test("adapter: fetches, returns events; failures come back as error, never 
   });
   assertEquals(boom.events.length, 0);
   assert(boom.error?.includes("dns"));
+});
+
+Deno.test("an excluded occurrence marks a row imported earlier; one nobody has seen is not inserted", async () => {
+  const { testDb } = await import("../testdb.ts");
+  const { upsertEvents } = await import("./upsert.ts");
+  const feed = (ex: string) =>
+    `BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:w@t
+DTSTART;TZID=Europe/Madrid:20261028T190000
+RRULE:FREQ=WEEKLY;COUNT=3
+${ex}SUMMARY:Weekly Circle
+LOCATION:Cafe Prueba
+URL:https://venue.fixture.test/circle
+END:VEVENT
+END:VCALENDAR`;
+  const read = async (text: string) =>
+    (await finalizeEvents(
+      parseIcs(text, {
+        now: NOW,
+        city: "Valencia",
+        country: "ES",
+        sourceUrl: "https://venue.fixture.test/c.ics",
+        tz: "Europe/Madrid",
+      }).events,
+      source(),
+      NOW,
+    )).events;
+  const { sql, close } = await testDb();
+  assertEquals((await upsertEvents(sql, await read(feed("")), "ics:1", NOW)).added, 3);
+  // The organiser now excludes Nov 4: the row imported yesterday is marked, nothing new is added.
+  const r = await upsertEvents(sql, await read(feed("EXDATE;TZID=Europe/Madrid:20261104T190000\n")), "ics:1", NOW);
+  assertEquals([r.added, r.updated], [0, 3]);
+  const rows = await sql`select starts_at, cancelled from sawk.events order by starts_at`;
+  assertEquals(rows.map((x) => x.cancelled), [false, true, false]);
+  // On a fresh database the excluded date is never inserted.
+  const fresh = await testDb();
+  const r2 = await upsertEvents(
+    fresh.sql,
+    await read(feed("EXDATE;TZID=Europe/Madrid:20261104T190000\n")),
+    "ics:1",
+    NOW,
+  );
+  assertEquals([r2.added, r2.skipped], [2, 1]);
+  await fresh.close();
+  await close();
+});
+
+Deno.test("MONTHLY with BYDAY and BYMONTHDAY takes the days in both (a Friday the 13th)", () => {
+  const rule = parseRule("FREQ=MONTHLY;BYDAY=FR;BYMONTHDAY=13")!;
+  const walls = expandRule(Date.UTC(2026, 0, 1, 20), rule, Date.UTC(2027, 11, 31), (u) => u.wall, (w) => w);
+  // Fridays that are the 13th: Feb, Mar and Nov 2026, Aug 2027.
+  assertEquals(walls.map((w) => new Date(w).toISOString().slice(0, 10)), [
+    "2026-02-13",
+    "2026-03-13",
+    "2026-11-13",
+    "2027-08-13",
+  ]);
+  // Each alone is unchanged: every Friday in the month, or the 13th of every month.
+  assertEquals(
+    expandRule(
+      Date.UTC(2026, 0, 1, 20),
+      parseRule("FREQ=MONTHLY;BYMONTHDAY=13;COUNT=2")!,
+      Date.UTC(2027, 0, 1),
+      (u) => u.wall,
+      (w) => w,
+    ).length,
+    2,
+  );
 });

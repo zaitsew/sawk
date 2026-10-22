@@ -212,23 +212,30 @@ export function expandRule(
       const m0 = ((monthIndex % 12) + 12) % 12;
       if (Date.UTC(y, m0, 1) > limitWall) break;
       const dim = daysInMonth(y, m0);
-      const days = new Set<number>();
+      // BYDAY and BYMONTHDAY together limit each other: only days in both.
+      const byDayHits = new Set<number>();
       if (rule.byDay.length) {
         for (const { ord, wd } of rule.byDay) {
           const hits: number[] = [];
           for (let d = 1; d <= dim; d++) if ((new Date(Date.UTC(y, m0, d)).getUTCDay() + 6) % 7 === wd) hits.push(d);
-          if (ord === 0) hits.forEach((d) => days.add(d));
+          if (ord === 0) hits.forEach((d) => byDayHits.add(d));
           else {
             const pick = ord > 0 ? hits[ord - 1] : hits[hits.length + ord];
-            if (pick) days.add(pick);
+            if (pick) byDayHits.add(pick);
           }
         }
-      } else if (rule.byMonthDay.length) {
-        for (const n of rule.byMonthDay) {
-          const d = n > 0 ? n : dim + n + 1;
-          if (d >= 1 && d <= dim) days.add(d);
-        }
-      } else if (s.d <= dim) days.add(s.d);
+      }
+      const monthDayHits = new Set<number>();
+      for (const n of rule.byMonthDay) {
+        const d = n > 0 ? n : dim + n + 1;
+        if (d >= 1 && d <= dim) monthDayHits.add(d);
+      }
+      let days: Set<number>;
+      if (rule.byDay.length && rule.byMonthDay.length) {
+        days = new Set([...byDayHits].filter((d) => monthDayHits.has(d)));
+      } else if (rule.byDay.length) days = byDayHits;
+      else if (rule.byMonthDay.length) days = monthDayHits;
+      else days = new Set(s.d <= dim ? [s.d] : []);
       for (const d of [...days].sort((a, b) => a - b)) {
         const wall = Date.UTC(y, m0, d) + tod;
         if (wall > limitWall && rule.count === null) continue;
@@ -411,10 +418,17 @@ export function parseIcs(text: string, opts: ParseOptions): { events: IngestEven
     );
     for (const wall of walls) {
       const s = toInstant(wall);
-      if (s > horizon || exdates.has(s) || (uid && overridden.has(`${uid}|${s}`))) continue;
+      if (s > horizon || (uid && overridden.has(`${uid}|${s}`))) continue;
       const len = durMs ?? 0;
       if (s + len < nowMs) continue;
-      out.push({ ...base, startsAt: isoInstant(s), endsAt: durMs === null ? null : isoInstant(s + len) });
+      // An excluded occurrence is emitted as cancelled, so a row imported before the exclusion is marked.
+      // (An occurrence nobody has seen is not inserted: the upsert skips cancelled events it does not know.)
+      out.push({
+        ...base,
+        startsAt: isoInstant(s),
+        endsAt: durMs === null ? null : isoInstant(s + len),
+        ...(exdates.has(s) ? { cancelled: true } : {}),
+      });
     }
   }
   return { events: out, skipped };
