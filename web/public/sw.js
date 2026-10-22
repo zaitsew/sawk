@@ -20,8 +20,9 @@ self.addEventListener("install", (e) => {
 
 self.addEventListener("activate", (e) => {
   e.waitUntil((async () => {
+    // The origin is shared with other apps (zaitsew.github.io): touch only our own caches.
     for (const k of await caches.keys()) {
-      if (k !== SHELL && k !== ASSETS) await caches.delete(k);
+      if (k.startsWith("sawk-") && k !== SHELL && k !== ASSETS) await caches.delete(k);
     }
     // Drop hashed files this build no longer has.
     if (PRECACHE.length) {
