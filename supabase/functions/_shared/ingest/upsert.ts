@@ -12,6 +12,8 @@ export interface Sighting {
   via: string;
   url: string;
   at: string;
+  /** This source reported the event cancelled. Only a source that did can un-cancel it. */
+  cancelled?: true;
 }
 
 export interface UpsertResult {
@@ -128,13 +130,23 @@ export function fromIncoming(e: ReadyEvent): Omit<Merged, "seen"> {
 export function mergeEvent(existing: Merged | null, inc: ReadyEvent, via: string, now: Date): Merged {
   const n = fromIncoming(inc);
   const sighting: Sighting = { via, url: inc.url, at: now.toISOString() };
+  if (n.cancelled) sighting.cancelled = true;
   if (!existing) return { ...n, seen: [sighting] };
 
   const sameSource = existing.seen.some((s) => s.via === via);
   // Times: the source that saw it before is the authority on a change; otherwise a timed reading beats an all-day one.
   const takeTimes = sameSource || (existing.allDay && !n.allDay);
-  const seen = existing.seen.filter((s) => s.url !== sighting.url || s.via !== via);
+
+  // Sightings. A source that now says "not cancelled" drops its own cancellation flag, nobody else's.
+  const flaggedBefore = existing.seen.some((s) => s.cancelled);
+  const seen = existing.seen
+    .filter((s) => s.url !== sighting.url || s.via !== via)
+    .map((s) => (s.via === via && !n.cancelled && s.cancelled ? { via: s.via, url: s.url, at: s.at } : s));
   seen.push(sighting);
+  // Stays cancelled if this source says so; or if it was cancelled and a source that cancelled it still stands,
+  // or nobody on record cancelled it (an agent or an older row): a feed cannot undo that.
+  const cancelled = n.cancelled || (existing.cancelled && (seen.some((s) => s.cancelled) || !flaggedBefore));
+  while (seen.length > MAX_SEEN) seen.splice(Math.max(0, seen.findIndex((s) => !s.cancelled)), 1);
 
   const hasPrice = existing.priceMin !== null || existing.priceMax !== null;
   return {
@@ -162,9 +174,8 @@ export function mergeEvent(existing: Merged | null, inc: ReadyEvent, via: string
     ticketUrl: existing.ticketUrl ?? n.ticketUrl,
     imageUrl: existing.imageUrl ?? n.imageUrl,
     lang: existing.lang ?? n.lang,
-    // Cancelled sticks, unless the source that said so now says otherwise.
-    cancelled: sameSource ? n.cancelled : existing.cancelled || n.cancelled,
-    seen: seen.slice(-MAX_SEEN),
+    cancelled,
+    seen,
   };
 }
 
@@ -183,6 +194,8 @@ export async function upsertEvents(sql: Sql, events: ReadyEvent[], via: string, 
   const cities = [...new Set(events.map((e) => e.city.toLowerCase()))];
 
   return await sql.begin(async (tx) => {
+    // The first read only finds candidates. A row is read again, locked, right before it is merged and
+    // written, so a field another writer (an agent, another run) filled in meanwhile is merged, not overwritten.
     const rows = await tx`
       select * from sawk.events
       where id = any(${tx.array(ids)}::text[])
@@ -190,53 +203,88 @@ export async function upsertEvents(sql: Sql, events: ReadyEvent[], via: string, 
              and starts_at >= ${from}::timestamptz and starts_at <= ${to}::timestamptz)`;
     const byId = new Map<string, Row>();
     const byFuzzy = new Map<string, Row[]>();
+    const keyOf = (r: Row) =>
+      fuzzyKey(r.title as string, iso(r.starts_at)!, (r.tz as string | null) ?? null, r.city as string);
     const index = (r: Row) => {
+      const old = byId.get(r.id as string);
+      if (old) byFuzzy.set(keyOf(old), (byFuzzy.get(keyOf(old)) ?? []).filter((x) => x.id !== r.id));
       byId.set(r.id as string, r);
-      const k = fuzzyKey(r.title as string, iso(r.starts_at)!, (r.tz as string | null) ?? null, r.city as string);
-      byFuzzy.set(k, [...(byFuzzy.get(k) ?? []), r]);
+      byFuzzy.set(keyOf(r), [...(byFuzzy.get(keyOf(r)) ?? []), r]);
     };
     rows.forEach(index);
 
+    const lock = async (id: string): Promise<Row | null> =>
+      (await tx`select * from sawk.events where id = ${id}::text for update`)[0] ?? null;
+    const write = async (row: Row, e: ReadyEvent) => {
+      const merged = mergeEvent(fromRow(row), e, via, now);
+      await update(tx, row.id as string, merged, now);
+      result.updated++;
+      index(rowOf(row.id as string, merged));
+    };
+
     for (const e of events) {
-      let row = byId.get(e.id);
-      if (!row) {
+      let hit = byId.get(e.id);
+      if (!hit) {
         // Same title, day and city, and one side does not know the venue: the same event.
         const cands = byFuzzy.get(fuzzyKey(e.title, e.startsAt, e.tz, e.city)) ?? [];
-        row = cands.find((c) => !c.venue || !e.venue);
+        hit = cands.find((c) => !c.venue || !e.venue);
       }
-      if (!row && e.cancelled) {
+      const row = hit ? await lock(hit.id as string) : null;
+      if (row) {
+        await write(row, e);
+        continue;
+      }
+      if (e.cancelled) {
         result.skipped++;
         continue;
       }
-      const merged = mergeEvent(row ? fromRow(row) : null, e, via, now);
-      if (row) {
-        await update(tx, row.id as string, merged, now);
-        result.updated++;
-        index({ ...row, ...toRow(row.id as string, merged) });
-      } else {
-        await insert(tx, e.id, merged, now);
+      const merged = mergeEvent(null, e, via, now);
+      if (await insert(tx, e.id, merged, now)) {
         result.added++;
-        index(toRow(e.id, merged));
+        index(rowOf(e.id, merged));
+      } else {
+        // Someone inserted it between our read and our write: merge into theirs.
+        const theirs = await lock(e.id);
+        if (theirs) await write(theirs, e);
       }
     }
     return result;
   });
 }
 
-function toRow(id: string, m: Merged): Row {
+/** A merged event in the shape of a `sawk.events` row, for the in-batch cache. Every column `fromRow` reads. */
+function rowOf(id: string, m: Merged): Row {
   return {
     id,
     title: m.title,
+    description: m.description,
     starts_at: m.startsAt,
+    ends_at: m.endsAt,
+    all_day: m.allDay,
     tz: m.tz,
     city: m.city,
+    country: m.country,
     venue: m.venue,
+    address: m.address,
+    lat: m.lat,
+    lon: m.lon,
+    category: m.category,
+    tags: m.tags,
+    price_min: m.priceMin,
+    price_max: m.priceMax,
+    currency: m.currency,
+    is_free: m.isFree,
+    url: m.url,
+    ticket_url: m.ticketUrl,
+    image_url: m.imageUrl,
+    lang: m.lang,
+    cancelled: m.cancelled,
     seen: m.seen,
   };
 }
 
-async function insert(tx: Sql, id: string, m: Merged, now: Date) {
-  await tx`
+async function insert(tx: Sql, id: string, m: Merged, now: Date): Promise<boolean> {
+  const rows = await tx`
     insert into sawk.events (id, title, description, starts_at, ends_at, all_day, tz, city, country, venue, address, lat, lon,
       category, tags, price_min, price_max, currency, is_free, url, ticket_url, image_url, lang, cancelled, seen,
       first_seen_at, last_seen_at)
@@ -247,7 +295,8 @@ async function insert(tx: Sql, id: string, m: Merged, now: Date) {
   }::text[], ${m.priceMin}::numeric, ${m.priceMax}::numeric, ${m.currency}, ${m.isFree}::boolean,
       ${m.url}, ${m.ticketUrl}, ${m.imageUrl}, ${m.lang}, ${m.cancelled}, ${tx.json(m.seen)}::jsonb,
       ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz)
-    on conflict (id) do nothing`;
+    on conflict (id) do nothing returning id`;
+  return rows.length > 0;
 }
 
 async function update(tx: Sql, id: string, m: Merged, now: Date) {

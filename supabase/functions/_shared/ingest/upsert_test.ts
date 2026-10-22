@@ -1,6 +1,7 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { testDb } from "../testdb.ts";
 import { finalizeEvents, type ReadyEvent } from "./normalize.ts";
+import type { Sql } from "../db.ts";
 import { type Merged, mergeEvent, upsertEvents } from "./upsert.ts";
 import { NOW, source } from "./testing.ts";
 import type { IngestEvent } from "./types.ts";
@@ -108,5 +109,91 @@ Deno.test("upsert: an empty batch does nothing", async () => {
   const { sql, close } = await testDb();
   assertEquals(await upsertEvents(sql, [], "ics:1", NOW), { added: 0, updated: 0, skipped: 0 });
   assert((await sql`select 1 from sawk.events`).length === 0);
+  await close();
+});
+
+Deno.test("merge: only a source that cancelled can un-cancel; the flag lives in the sighting", async () => {
+  const a = mergeEvent(null, await ready({ cancelled: true }), "ics:1", NOW);
+  assertEquals(a.seen[0].cancelled, true);
+  // B has seen it before, not cancelled: it cannot clear A's cancellation.
+  const b = mergeEvent(a, await ready({ url: "https://b.test/x" }), "jsonld:2", NOW);
+  assertEquals(b.cancelled, true);
+  assertEquals(b.seen.find((s) => s.via === "jsonld:2")?.cancelled, undefined);
+  // B cancels too, then A takes it back: B still stands.
+  const c = mergeEvent(b, await ready({ url: "https://b.test/x", cancelled: true }), "jsonld:2", NOW);
+  const d = mergeEvent(c, await ready(), "ics:1", NOW);
+  assertEquals(d.cancelled, true);
+  assertEquals(d.seen.find((s) => s.via === "ics:1")?.cancelled, undefined);
+  // Last one to take it back un-cancels.
+  const e = mergeEvent(d, await ready({ url: "https://b.test/x" }), "jsonld:2", NOW);
+  assertEquals(e.cancelled, false);
+  // A cancellation nobody on record made (an agent, an older row) is not undone by a feed.
+  const agent = { ...mergeEvent(null, await ready(), "agent:run-1", NOW), cancelled: true };
+  assertEquals(mergeEvent(agent, await ready(), "ics:1", NOW).cancelled, true);
+  assertEquals(mergeEvent(agent, await ready(), "agent:run-1", NOW).cancelled, true);
+});
+
+Deno.test("upsert: a cancellation survives the database round trip and the wrong source cannot clear it", async () => {
+  const { sql, close } = await testDb();
+  await upsertEvents(sql, [await ready()], "ics:1", NOW);
+  await upsertEvents(sql, [await ready({ cancelled: true })], "ics:1", NOW);
+  await upsertEvents(sql, [await ready({ url: "https://b.test/x" })], "jsonld:2", NOW);
+  let [r] = await sql`select cancelled, seen from sawk.events`;
+  assertEquals(r.cancelled, true);
+  assertEquals((r.seen as { via: string; cancelled?: boolean }[]).filter((s) => s.cancelled).map((s) => s.via), [
+    "ics:1",
+  ]);
+  await upsertEvents(sql, [await ready()], "ics:1", NOW);
+  [r] = await sql`select cancelled from sawk.events`;
+  assertEquals(r.cancelled, false);
+  await close();
+});
+
+Deno.test("upsert: two sightings of one event in a single batch merge without error", async () => {
+  const { sql, close } = await testDb();
+  // The first inserts; the second has no venue and finds it through the in-batch cache.
+  const withVenue = await ready({ category: "music" });
+  const noVenue = await ready({ venue: null, url: "https://c.test/y", priceMin: 9, currency: "EUR" });
+  assertEquals(await upsertEvents(sql, [withVenue, noVenue], "jsonld:3", NOW), { added: 1, updated: 1, skipped: 0 });
+  const rows = await sql`select category, venue, price_min from sawk.events`;
+  assertEquals(rows.length, 1);
+  assertEquals([rows[0].category, rows[0].venue, Number(rows[0].price_min)], ["music", "Jimmy Glass", 9]);
+  await close();
+});
+
+Deno.test("upsert: what another writer filled in after the first read survives", async () => {
+  const { sql, close } = await testDb();
+  const base = await ready();
+  await upsertEvents(sql, [base], "ics:1", NOW);
+  // An agent enriches the row after our candidate read but before our write: simulated inside the same transaction,
+  // right after the window query returns.
+  let fired = false;
+  const wrapped = Object.assign(
+    (strings: TemplateStringsArray, ...v: unknown[]) => sql(strings, ...v),
+    sql,
+    {
+      begin: <T>(fn: (tx: Sql) => Promise<T>) =>
+        sql.begin((tx) => {
+          const spy = Object.assign(
+            async (strings: TemplateStringsArray, ...v: unknown[]) => {
+              const rows = await tx(strings, ...v);
+              if (!fired && strings.join("?").includes("lower(city) = any")) {
+                fired = true;
+                await tx`update sawk.events set description = 'Written by an agent, long and careful', price_min = 15, image_url = 'https://agent.test/i.jpg'`;
+              }
+              return rows;
+            },
+            tx,
+          ) as unknown as Sql;
+          return fn(spy);
+        }),
+    },
+  ) as unknown as Sql;
+  await upsertEvents(wrapped, [await ready({ description: "short", priceMin: 40 })], "ics:1", NOW);
+  assert(fired);
+  const [r] = await sql`select description, price_min, image_url from sawk.events`;
+  assertEquals(r.description, "Written by an agent, long and careful");
+  assertEquals(Number(r.price_min), 15);
+  assertEquals(r.image_url, "https://agent.test/i.jpg");
   await close();
 });
