@@ -1,0 +1,10 @@
+{
+  "tasks": {
+    "test": "deno test --allow-read --allow-env --allow-net=127.0.0.1 supabase/functions scripts",
+    "check": "deno check supabase/functions/**/*.ts scripts/*.ts",
+    "migrate": "deno run --allow-read --allow-env --allow-net scripts/migrate.ts"
+  },
+  "fmt": { "lineWidth": 120 },
+  "lint": { "rules": { "exclude": ["no-explicit-any"] } },
+  "exclude": ["web"]
+}

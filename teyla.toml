@@ -1,0 +1,99 @@
+# teyla.toml — what must run without you, and what only you can confirm.
+#
+# `teyla routines` reads this file. `teyla run` reads the routines in it that
+# declare a `step`. Both halves rot silently, which is why they live in one file.
+
+[product]
+name = "sawk"
+# A command printing key=value counters, read by `teyla products`. The
+# built-but-nobody-used-it detector — fill it in before you ship, not after.
+usage = "./check.sh usage"
+
+# Apple distribution: the bundle id `teyla testflight` asks App Store Connect about.
+# [release]
+# apple_bundle_id = "com.example.app"
+
+# Android distribution: the application id `teyla play` asks Google Play about.
+# android_package = "com.example.app"
+
+
+# ---------------------------------------------------------------------------
+# Who this serves, and who it should serve next. `teyla productize` reads this
+# block and says what stands between the two. Fill it in now — the answers are
+# cheap while the code is small and expensive once someone is waiting.
+# ---------------------------------------------------------------------------
+[productize]
+users = "owner"                         # owner | family | testers | public
+target = "public"                       # what you want next (open source)
+platforms = ["web", "extension"]                     # ios | macos | web | android | watch | extension | cli
+primary = "web"                         # the one platform features land on first (POLICY §11);
+                                        # every other entry in `platforms` needs a dated
+                                        # line in [productize.triggers] below (R10)
+identity = "supabase-auth+tokens"                       # none | shared-key | invite-key | supabase-auth |
+                                        # supabase-auth+tokens | sign-in-with-apple | icloud
+tenancy = "user_id"                      # single | per-device | user_id | user_id+rls
+backend = "supabase:ltdiybajsogaydzooiwz"                        # none | local-mac | supabase:<ref> | droplet:<name> |
+                                        # vercel | github-pages
+llm = "none"                            # none | byo-key | app-key | proxy-metered |
+                                        # byo-key+proxy-metered
+first_run = "sign-in"                      # sign-in | sign-in+skip | none — the screen the
+                                        # app opens on; see "The first screen" in
+                                        # docs/PRODUCTIZE.md. Never "none" for family/public.
+sample_data = "none"              # none | labelled | unlabelled — canned content must
+                                        # never look like the user's own
+onboarding_doc = "docs/GETTING-STARTED.md"
+secrets = ["DATABASE_URL", "TICKETMASTER_API_KEY"]                            # every name must appear in .env.example
+cost_cap = ""                           # required once your key pays for someone else's use
+
+[productize.distribution]
+web = "github-pages"                    # none | pwa | github-pages | vercel | droplet
+# ios = "none"                          # none | xcode | testflight-internal |
+#                                       # testflight-external | app-store
+# macos = "none"                        # none | xcode | testflight | dmg-notarized | app-store
+# android = "none"                      # none | apk-sideload | pwa | play-internal | play
+# extension = "none"                    # none | unpacked-zip | chrome-web-store
+# watch = "none"                        # none | testflight-external | app-store |
+#                                       # connect-iq-sideload | connect-iq-store | garmin-connect
+
+# One line per platform in `platforms` other than `primary`: an ISO date, then the
+# reason (a named person who cannot use the primary, or the owner asking for it).
+[productize.triggers]
+# "extension" = the MCP connector in agent harnesses and chats, read through Loco on iOS.
+extension = "2026-10-23: owner asked for it in the kickoff (\"deeply integrated on ai harnesses ... and ai bots\")"
+
+# One per thing standing in the way. `who` is who can actually do it — an owner
+# blocker is an account, a payment or a signature; an agent blocker is work.
+# [[productize.blocker]]
+# what = "no account system"
+# who = "agent"
+# how = "user_id + row-level security from the first migration, not retrofitted"
+
+
+# ---------------------------------------------------------------------------
+# Routines: filled by the ingest and agents lanes (sawk-ingest pg_cron, the
+# nightly agent run on the Mac).
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# A legacy routine: scheduled somewhere else, reported on here.
+# kind = launchd | cron | pg_cron | github-actions | script
+# ---------------------------------------------------------------------------
+# [[routine]]
+# name = "nightly-sync"
+# kind = "launchd"
+# label = "com.example.sync"
+# every = "1d"                          # 15m | 1h | 1d | 7d | any <n>m|h|d (script routines may omit label and every)
+# log = "~/Library/Logs/example-sync.log"
+# paused = "2026-01-01: owner keeps it off until the product is reviewed"   # deliberately off: shown as
+#                                       # `paused`, never a problem; delete the key to watch it again
+
+
+# ---------------------------------------------------------------------------
+# A check: the half only a human can confirm, from the outside, today.
+# ---------------------------------------------------------------------------
+[[check]]
+name = "first-run check passes on a clean machine"
+how = "clone the repo, run ./check.sh, read what it says"
+status = "untested"                     # ok | broken | untested
+# confirmed = 2026-01-01
