@@ -7,7 +7,7 @@ import { finalizeEvents } from "../_shared/ingest/normalize.ts";
 import { hostAllowed, hostOf as hostnameOf, NOT_ALLOWED } from "../_shared/ingest/hosts.ts";
 import { guardedFetch } from "../_shared/ingest/ssrf.ts";
 import type { Fetch, SourceRow } from "../_shared/ingest/types.ts";
-import { upsertEvents } from "../_shared/ingest/upsert.ts";
+import { collapseDuplicates, upsertEvents } from "../_shared/ingest/upsert.ts";
 import { writeFallbackRanks } from "../_shared/score.ts";
 
 export interface IngestOptions {
@@ -44,6 +44,8 @@ export interface IngestSummary {
   eventsSeen: number;
   eventsAdded: number;
   eventsUpdated: number;
+  /** Stored duplicates folded into another row this run. */
+  eventsMerged: number;
   ranked: number;
   rankedUsers: number;
   notes: string;
@@ -160,6 +162,14 @@ export async function runIngest(sql: Sql, opts: IngestOptions = {}): Promise<Ing
   let ranked = 0;
   let rankedUsers = 0;
   const notes: string[] = [];
+  // Rows stored twice under title variants (agents match by id only) become one before anything is ranked.
+  let merged = 0;
+  try {
+    merged = await serial(() => collapseDuplicates(sql, now));
+    if (merged) notes.push(`merged ${merged} duplicate event${merged === 1 ? "" : "s"}`);
+  } catch (e) {
+    notes.push(`duplicate merge failed: ${(e as Error).message}`);
+  }
   if (opts.rank !== false) {
     try {
       const r = await writeFallbackRanks(sql, now);
@@ -189,5 +199,16 @@ export async function runIngest(sql: Sql, opts: IngestOptions = {}): Promise<Ing
       ranked = ${ranked}, notes = ${noteText || null}
     where id = ${runId}::uuid`;
 
-  return { runId, status, sources: list, eventsSeen, eventsAdded, eventsUpdated, ranked, rankedUsers, notes: noteText };
+  return {
+    runId,
+    status,
+    sources: list,
+    eventsSeen,
+    eventsAdded,
+    eventsUpdated,
+    eventsMerged: merged,
+    ranked,
+    rankedUsers,
+    notes: noteText,
+  };
 }
