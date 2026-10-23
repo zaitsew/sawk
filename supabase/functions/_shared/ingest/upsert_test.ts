@@ -443,3 +443,22 @@ Deno.test("collapse: a festival and its workshops stay apart whatever the order;
   assertEquals((await sql`select state from sawk.feed where user_id = ${USER}::uuid`).map((r) => r.state), ["going"]);
   await close();
 });
+
+Deno.test("collapse: performances do not chain through a folded row; an all-day end date survives", async () => {
+  const { sql, close } = await testDb();
+  const put = (id: string, title: string, startsAt: string, allDay: boolean, endsAt: string | null = null) =>
+    sql`insert into sawk.events (id, title, starts_at, ends_at, all_day, tz, city, venue, category, url, first_seen_at)
+        values (${id}, ${title}, ${startsAt}::timestamptz, ${endsAt}::timestamptz, ${allDay}, 'Europe/Madrid', 'Valencia',
+                'Teatre Talia', 'theatre', ${"https://x.test/" + id}, ${NOW.toISOString()}::timestamptz)`;
+  await put("h1", "Hamlet", "2026-11-04T10:00:00Z", false);
+  await put("h2", "Hamlet Valencia Tickets", "2026-11-04T13:00:00Z", false);
+  await put("h3", "Hamlet en Teatre Talia, Valencia 2026", "2026-11-04T16:00:00Z", false);
+  await put("f1", "Fallas", "2026-11-05T23:00:00Z", true);
+  await put("f2", "Fallas Valencia 2026", "2026-11-05T23:00:00Z", true, "2026-11-08T23:00:00Z");
+  // h2 joins h1 (3 hours apart); h3 is a variant of h2 but 6 hours after h1: it stays. The festival keeps its end.
+  assertEquals(await collapseDuplicates(sql, NOW), 2);
+  assertEquals((await sql`select id from sawk.events order by id`).map((r) => r.id), ["f1", "h1", "h3"]);
+  const [f] = await sql`select ends_at from sawk.events where id = 'f1'`;
+  assertEquals(new Date(f.ends_at as string).toISOString(), "2026-11-08T23:00:00.000Z");
+  await close();
+});

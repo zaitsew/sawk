@@ -386,9 +386,7 @@ export function foldEvents(keep: Merged, dup: Merged): Merged {
     ...keep,
     description: (dup.description?.length ?? 0) > (keep.description?.length ?? 0) ? dup.description : keep.description,
     startsAt: timesFromDup ? dup.startsAt : keep.startsAt,
-    endsAt: timesFromDup
-      ? dup.endsAt
-      : keep.endsAt ?? (!keep.allDay && dup.endsAt && dup.endsAt > keep.startsAt ? dup.endsAt : null),
+    endsAt: timesFromDup ? dup.endsAt : keep.endsAt ?? (dup.endsAt && dup.endsAt > keep.startsAt ? dup.endsAt : null),
     allDay: timesFromDup ? dup.allDay : keep.allDay,
     tz: timesFromDup ? dup.tz ?? keep.tz : keep.tz ?? dup.tz,
     country: keep.country ?? dup.country,
@@ -447,7 +445,9 @@ export async function collapseDuplicates(sql: Sql, now: Date): Promise<number> {
         const j = m ? sighted.indexOf(m) : -1;
         if (j < 0 || j > i) continue;
         const k = root.get(j) ?? j;
-        if (!sameVenue(sighted[k].venue, sighted[i].venue, sighted[i].city)) continue;
+        // It must be a variant of the row that stays too, not only of a row already folded into it:
+        // "Hamlet" at 11:00, 14:00 and 17:00 must not chain into one.
+        if (k !== j && variantOf(sighted[i], [sighted[k]]) !== sighted[k]) continue;
         root.set(i, k);
         merged.set(k, foldEvents(merged.get(k) ?? fromRow(group[k]), fromRow(r)));
         const keepId = group[k].id as string, dupId = r.id as string;
