@@ -64,6 +64,8 @@ create trigger sources_city_key before insert or update of city on sawk.sources
   for each row execute function sawk.set_city_key();
 
 -- An alias added, changed or removed: re-key the events and sources it moves.
+-- Aliases change only in migrations; a row inserted concurrently with one keeps the old key
+-- until its city is written again (`update ... set city_key = sawk.city_key(city)` re-keys all).
 create or replace function sawk.rekey_cities()
 returns trigger
 language plpgsql set search_path = '' as $$
