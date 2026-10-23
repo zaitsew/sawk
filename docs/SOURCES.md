@@ -28,6 +28,19 @@ Rules every adapter shares:
 - An event's id comes from title, local date, venue and city, so the same
   concert seen on two sources lands on one row. A sighting with no venue joins
   the row with the same title, day and city.
+- Listings dress titles: "Francisca Valenzuela en Loco Club, Valencia 2026"
+  is Songkick's "Francisca Valenzuela". A sighting joins a row on the same
+  local day and city when their title cores match (the city, a trailing year,
+  "tickets" and " en <venue>" stripped) and the venues agree (one unknown, one
+  inside the other, or a naming word in common), unless both are timed and
+  start more than 3 hours apart. A timed act listing may also be the first
+  words of one all-day listing ("Michel Camilo" at 19:00 / "Michel Camilo
+  Trio" all day) when it is the only such row; a short all-day title (a
+  festival) never takes its longer workshops.
+- After the sources, the ingest folds rows already stored twice that way
+  (older rows, or agents' additions, which match by id only) into one, and
+  moves the person's state, rating, agent rank and feedback to the row that
+  stays. Upcoming, not cancelled events only.
 - Events that are over, or more than 400 days ahead, are dropped. City, country
   and time zone default from the source row.
 - Recurring ICS events (`DAILY`, `WEEKLY`, `MONTHLY`, with `INTERVAL`, `COUNT`,
