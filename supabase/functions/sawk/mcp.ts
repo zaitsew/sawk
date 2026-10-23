@@ -119,7 +119,9 @@ export function buildServer(ctx: Ctx, telemetry: Telemetry): McpServer {
     "List events already known",
     "Call this before searching a city, to see which events are already known there in a date range so you add only what is missing. Returns compact events with their ids and, when you already ranked one for this person, its score and state.",
     {
-      city: z.string().describe("City name, as in the windows from sawk_context; any spelling or language of the same city works."),
+      city: z.string().describe(
+        "City name, as in the windows from sawk_context; any spelling or language of the same city works.",
+      ),
       from: date("First day"),
       to: date("Last day, at most 120 days after from"),
       category: z.enum(CATEGORIES).optional(),
