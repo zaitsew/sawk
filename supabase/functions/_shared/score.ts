@@ -198,6 +198,8 @@ export interface DayPlace {
   city: string;
   country: string | null;
   tz: string | null;
+  /** sawk.city_key(city): "Валенсия" and "Valencia" share one. Without it, names are compared. */
+  key?: string | null;
 }
 
 export interface WindowRow extends DayPlace {
@@ -212,7 +214,7 @@ export function dayPlaces(home: DayPlace, windows: WindowRow[], from: string, da
     const d = addDays(from, i);
     let place = home;
     for (const w of windows) if (w.from <= d && d <= w.to) place = w;
-    out.set(d, { city: place.city, country: place.country, tz: place.tz ?? home.tz });
+    out.set(d, { city: place.city, country: place.country, tz: place.tz ?? home.tz, key: place.key ?? null });
   }
   return out;
 }
@@ -229,7 +231,7 @@ export interface Candidate {
  * Returns null when the event is over, or the person is never in its city.
  */
 export function assignDay(
-  ev: ScoreEvent & { tz: string | null },
+  ev: ScoreEvent & { tz: string | null; cityKey?: string | null },
   places: Map<string, DayPlace>,
   now: Date,
 ): string | null {
@@ -238,7 +240,7 @@ export function assignDay(
   if (isNaN(start) || over < now.getTime()) return null;
   const tzOf = (d: string) => (isValidTz(ev.tz) ? ev.tz : places.get(d)?.tz ?? null);
   for (const [d, place] of places) {
-    if (!sameCity(place.city, ev.city)) continue;
+    if (!(place.key && ev.cityKey ? place.key === ev.cityKey : sameCity(place.city, ev.city))) continue;
     const tz = tzOf(d);
     const s = localDate(ev.startsAt, tz);
     const e = ev.endsAt ? localDate(new Date(Date.parse(ev.endsAt) - 1000).toISOString(), tz) : s;
@@ -341,16 +343,18 @@ async function rankUser(sql: Sql, p: Row, now: Date): Promise<{ ranked: number; 
   }
   if (!home) return null; // nowhere to rank for
   home.tz = isValidTz(home.tz) ? home.tz : defaultTz(home.city, home.country);
+  home.key = (await sql`select sawk.city_key(${home.city}::text) as k`)[0].k as string;
 
   const from = todayIn(now, home.tz);
   const to = addDays(from, HORIZON_DAYS - 1);
   const manual = await sql`
-    select city, country, tz, starts_on::text as f, ends_on::text as t from sawk.windows
+    select city, sawk.city_key(city) as key, country, tz, starts_on::text as f, ends_on::text as t from sawk.windows
     where user_id = ${userId}::uuid and ends_on >= ${from}::date and starts_on <= ${to}::date order by starts_on`;
   const loco = await sql`
-    select city, country, tz, starts_on::text as f, ends_on::text as t from sawk.loco_windows(${userId}::uuid, ${from}::date, ${to}::date)`;
+    select city, sawk.city_key(city) as key, country, tz, starts_on::text as f, ends_on::text as t from sawk.loco_windows(${userId}::uuid, ${from}::date, ${to}::date)`;
   const windows: WindowRow[] = [...manual, ...loco].map((w) => ({
     city: w.city as string,
+    key: (w.key as string | null) ?? null,
     country: (w.country as string | null) ?? null,
     tz: (w.tz as string | null) ?? null,
     from: w.f as string,
@@ -361,7 +365,7 @@ async function rankUser(sql: Sql, p: Row, now: Date): Promise<{ ranked: number; 
   const winFrom = new Date(Date.parse(from + "T00:00:00Z") - DAY).toISOString();
   const winTo = new Date(Date.parse(to + "T00:00:00Z") + 2 * DAY).toISOString();
   const events = await sql`
-    select id, title, starts_at, ends_at, all_day, tz, city, venue, category, tags, price_min, price_max, currency, is_free
+    select id, title, starts_at, ends_at, all_day, tz, city, city_key, venue, category, tags, price_min, price_max, currency, is_free
     from sawk.events
     where not cancelled and starts_at < ${winTo}::timestamptz
       and coalesce(ends_at, starts_at + interval '3 hours') >= ${winFrom}::timestamptz`;
@@ -394,7 +398,7 @@ async function rankUser(sql: Sql, p: Row, now: Date): Promise<{ ranked: number; 
   const byDay = new Map<string, (Candidate & Scored & { startMs: number })[]>();
   for (const r of events) {
     if (taken.has(r.id as string)) continue;
-    const ev: ScoreEvent & { tz: string | null } = {
+    const ev: ScoreEvent & { tz: string | null; cityKey: string | null } = {
       title: r.title as string,
       category: r.category as string,
       tags: (r.tags as string[]) ?? [],
@@ -408,6 +412,7 @@ async function rankUser(sql: Sql, p: Row, now: Date): Promise<{ ranked: number; 
       currency: (r.currency as string | null) ?? null,
       isFree: (r.is_free as boolean | null) ?? null,
       tz: (r.tz as string | null) ?? null,
+      cityKey: (r.city_key as string | null) ?? null,
     };
     const day = assignDay(ev, places, now);
     if (!day) continue;

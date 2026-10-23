@@ -23,7 +23,7 @@ Deno.test("the same event from two sources gets one id", async () => {
 Deno.test("migrations apply and the schema is closed to anon", async () => {
   const { sql, close } = await testDb();
   const rows = await sql`select count(*)::int as n from information_schema.tables where table_schema = 'sawk'`;
-  assertEquals(rows[0].n, 9);
+  assertEquals(rows[0].n, 11);
   const grants = await sql`select count(*)::int as n from information_schema.role_table_grants where table_schema = 'sawk' and grantee in ('anon', 'authenticated')`;
   assertEquals(grants[0].n, 0);
   await close();

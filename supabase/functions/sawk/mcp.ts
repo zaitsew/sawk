@@ -83,7 +83,7 @@ export function buildServer(ctx: Ctx, telemetry: Telemetry): McpServer {
   tool(
     "sawk_context",
     "Get everything for a run",
-    "Call this first in every run. Returns the person's profile (likes, avoids, notes in their own words, price cap, languages), the windows of days and cities to cover (home and trips, each with from/to dates), days already planned, their taste, their last 90 days of reactions to events, the known sources to search per city, how many events are already known per city, and your last runs.",
+    "Call this first in every run. Returns the person's profile (likes, avoids, notes in their own words, price cap, languages), the windows of days and cities to cover (home and trips, each with from/to dates; `canonical` is the city's name in sources when the person wrote it another way, search the web with it), days already planned, their taste, their last 90 days of reactions to events, the known sources to search per city, how many events are already known per city, and your last runs.",
     { days: z.number().int().min(1).max(60).optional().describe("How many days ahead to cover, 1-60. Default 21.") },
     (a) => core.context(ctx, a),
     { readOnly: true },
@@ -119,7 +119,7 @@ export function buildServer(ctx: Ctx, telemetry: Telemetry): McpServer {
     "List events already known",
     "Call this before searching a city, to see which events are already known there in a date range so you add only what is missing. Returns compact events with their ids and, when you already ranked one for this person, its score and state.",
     {
-      city: z.string().describe("City name, as in the windows from sawk_context."),
+      city: z.string().describe("City name, as in the windows from sawk_context; any spelling or language of the same city works."),
       from: date("First day"),
       to: date("Last day, at most 120 days after from"),
       category: z.enum(CATEGORIES).optional(),
