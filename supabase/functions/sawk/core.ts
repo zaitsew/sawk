@@ -109,7 +109,9 @@ export async function profile(ctx: Ctx, args: unknown): Promise<Profile> {
     const next: Profile = { ...cur };
     const has = (k: string) => k in set;
     if (has("homeCity")) next.homeCity = set.homeCity === null ? null : reqStr(set, "homeCity", 100);
-    if (has("homeCountry")) next.homeCountry = set.homeCountry === null ? null : (optCountry(set, "homeCountry") ?? null);
+    if (has("homeCountry")) {
+      next.homeCountry = set.homeCountry === null ? null : (optCountry(set, "homeCountry") ?? null);
+    }
     if (has("homeTz")) next.homeTz = set.homeTz === null ? null : (optTz(set, "homeTz") ?? null);
     if (has("langs")) next.langs = strList(set.langs, "langs", 30, 40);
     if (has("likes")) next.likes = strList(set.likes, "likes", 30, 40);
@@ -130,9 +132,7 @@ export async function profile(ctx: Ctx, args: unknown): Promise<Profile> {
     const rows = await tx`
       insert into sawk.profiles (user_id, home_city, home_country, home_tz, langs, likes, avoids, notes, price_max, currency, max_per_day, updated_at)
       values (${ctx.userId}::uuid, ${next.homeCity}::text, ${next.homeCountry}::text, ${next.homeTz}::text,
-              ${tx.array(next.langs)}::text[], ${tx.array(next.likes)}::text[], ${
-      tx.array(next.avoids)
-    }::text[],
+              ${tx.array(next.langs)}::text[], ${tx.array(next.likes)}::text[], ${tx.array(next.avoids)}::text[],
               ${next.notes}::text, ${next.priceMax}::numeric, ${next.currency}::text, ${next.maxPerDay}::smallint, ${ctx.now().toISOString()}::timestamptz)
       on conflict (user_id) do update set
         home_city = excluded.home_city, home_country = excluded.home_country, home_tz = excluded.home_tz,
@@ -303,7 +303,7 @@ export async function feed(ctx: Ctx, args: unknown) {
       and (f.state in ('saved', 'going', 'went')
            or case when e.all_day then (e.starts_at at time zone coalesce(e.tz, ${tz}::text))::date >= ${today}::date
                    else coalesce(e.ends_at, e.starts_at) >= ${now.toISOString()}::timestamptz - interval '3 hours' end)
-      and (${city}::text is null or lower(e.city) = lower(${city}::text))
+      and (${city}::text is null or e.city_key = sawk.city_key(${city}::text))
       and (case when ${state}::text is null then f.state <> 'hidden' else f.state = ${state}::text end)
     order by (e.starts_at at time zone coalesce(e.tz, ${tz}::text))::date, f.score desc, e.starts_at
     limit ${limit}::int`;
@@ -439,7 +439,7 @@ export async function addWindow(ctx: Ctx, args: unknown) {
   if (daysBetween(from, to) > 366) throw bad("a window is at most 366 days long");
   const dup = await ctx.sql`
     select id::text as id, city, country, tz, starts_on::text as starts_on, ends_on::text as ends_on, note from sawk.windows
-    where user_id = ${ctx.userId}::uuid and lower(city) = lower(${city}::text) and starts_on = ${from}::date and ends_on = ${to}::date`;
+    where user_id = ${ctx.userId}::uuid and sawk.city_key(city) = sawk.city_key(${city}::text) and starts_on = ${from}::date and ends_on = ${to}::date`;
   if (dup[0]) return rowToManualWindow(dup[0]);
   const rows = await ctx.sql`
     insert into sawk.windows (user_id, city, country, tz, starts_on, ends_on, note)
@@ -637,12 +637,28 @@ export async function context(ctx: Ctx, args: unknown) {
       at: iso(r.at)!.slice(0, 10),
     }));
 
-  // Sources and the pool, per window city.
-  const cities = new Map<string, string>(); // lower -> as written first
-  for (const w of windows) if (!cities.has(w.city.toLowerCase())) cities.set(w.city.toLowerCase(), w.city);
+  // Sources and the pool, per window city. A city is its key: "Валенсия" and "Valencia" are one place.
+  const written = [...new Set(windows.map((w) => w.city))];
+  const keyOf = new Map<string, { key: string; name: string | null }>();
+  if (written.length) {
+    for (
+      const r of await sql`select c as city, sawk.city_key(c) as key, sawk.city_name(sawk.city_key(c)) as name
+                           from unnest(${sql.array(written)}::text[]) as c`
+    ) keyOf.set(String(r.city), { key: String(r.key), name: (r.name as string | null) ?? null });
+  }
+  for (const w of windows) {
+    // The name the sources and the web use, when the person's own spelling is another.
+    const name = keyOf.get(w.city)?.name;
+    if (name && name !== w.city) w.canonical = name;
+  }
+  const cities = new Map<string, string>(); // key -> as written first
+  for (const w of windows) {
+    const key = keyOf.get(w.city)!.key;
+    if (!cities.has(key)) cities.set(key, w.city);
+  }
   const sources = cities.size === 0 ? [] : (await sql`
       select id::text as id, city, kind, url, label, categories, last_ok_at, last_error from sawk.sources
-      where active and lower(city) = any(${sql.array([...cities.keys()])}::text[]) order by lower(city), kind, label`)
+      where active and city_key = any(${sql.array([...cities.keys()])}::text[]) order by city_key, kind, label`)
     .map((r) => ({
       id: r.id,
       city: r.city,
@@ -655,11 +671,12 @@ export async function context(ctx: Ctx, args: unknown) {
     }));
   const pool: Record<string, number> = {};
   for (const w of windows) {
-    const key = cities.get(w.city.toLowerCase())!;
+    const cityKey = keyOf.get(w.city)!.key;
+    const key = cities.get(cityKey)!;
     const tz = w.tz ?? homeTz;
     const n = (await sql<{ n: number }>`
         select count(*)::int as n from sawk.events e
-        where lower(e.city) = lower(${w.city}::text) and not e.cancelled and e.starts_at >= ${now.toISOString()}::timestamptz
+        where e.city_key = ${cityKey} and not e.cancelled and e.starts_at >= ${now.toISOString()}::timestamptz
           and (e.starts_at at time zone coalesce(e.tz, ${tz}::text))::date between ${w.from}::date and ${w.to}::date`)[
       0
     ].n;

@@ -56,7 +56,7 @@ Deno.test("cron: the kick function exists, is closed to the public, and says wha
   await assertRejects(() => sql`select sawk.ingest_kick()`, Error, "Vault is not available");
   assertEquals(
     (await sql`select count(*)::int as n from information_schema.tables where table_schema = 'sawk'`)[0].n,
-    9,
+    11,
   );
   await close();
 });

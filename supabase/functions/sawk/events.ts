@@ -292,7 +292,7 @@ export async function listEvents(ctx: Ctx, args: unknown) {
            f.score, f.state
     from sawk.events e
     left join sawk.feed f on f.event_id = e.id and f.user_id = ${ctx.userId}::uuid
-    where lower(e.city) = lower(${city}::text) and not e.cancelled
+    where e.city_key = sawk.city_key(${city}::text) and not e.cancelled
       and (e.starts_at at time zone coalesce(e.tz, ${tz}::text))::date between ${from}::date and ${to}::date
       and (${category ?? null}::text is null or e.category = ${category ?? null}::text)
     order by e.starts_at

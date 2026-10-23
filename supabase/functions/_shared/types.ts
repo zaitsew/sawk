@@ -39,6 +39,8 @@ export interface Window {
   source: "home" | "loco" | "manual";
   id?: string;
   note?: string | null;
+  /** The name sources and events use for this city, when `city` is written another way ("Валенсия" -> "Valencia"). */
+  canonical?: string;
 }
 
 export interface EventIn {

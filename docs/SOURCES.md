@@ -4,7 +4,9 @@ Where SAWk's events come from, how each source was checked, and how the daily
 ingest runs. The starting set is Valencia, Spain (migration
 `db/migrations/0003_sources_seed.sql`). Adding a city is adding rows to
 `sawk.sources` (agents do it with `sawk_add_source`); nothing in the code is
-specific to Valencia.
+specific to Valencia. A source matches a window by city key, so a row written
+"Las Palmas de Gran Canaria" serves a Loco trip to "Гран-Канария" (see
+`docs/ARCHITECTURE.md`, Cities).
 
 ## How a source is read
 

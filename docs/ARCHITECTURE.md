@@ -56,7 +56,7 @@ All tools take and return JSON. Dates are `YYYY-MM-DD`, times ISO 8601 with offs
 
 | tool | input | returns |
 |---|---|---|
-| `sawk_context` | `{days?: 1..60 = 21}` | everything a run needs: `profile`, `windows` (home + trips, each `{city, country, tz, from, to, source}`), `busy` (days already planned, from Loco), `taste` (Loco ratings summary), `history` (last 90 days of feedback: counts per category and action, the last 30 titles saved/going/hidden/rated), `sources` (per window city), `pool` (events already known per city in the window), `lastRuns` (3) |
+| `sawk_context` | `{days?: 1..60 = 21}` | everything a run needs: `profile`, `windows` (home + trips, each `{city, canonical?, country, tz, from, to, source}`), `busy` (days already planned, from Loco), `taste` (Loco ratings summary), `history` (last 90 days of feedback: counts per category and action, the last 30 titles saved/going/hidden/rated), `sources` (per window city), `pool` (events already known per city in the window), `lastRuns` (3) |
 | `sawk_run_start` | `{agent, model?, cities?}` | `{runId}` |
 | `sawk_run_finish` | `{runId, status: ok\|partial\|failed, notes?}` | the run row |
 | `sawk_events` | `{city, from, to, category?, limit? = 200}` | pool events in that window |
@@ -96,6 +96,17 @@ For the web feed and Loco. Same auth, JSON bodies, same shapes as the MCP tools.
 | GET | `/api/runs?limit=` | the person's runs, newest first |
 | GET, POST, DELETE | `/api/tokens[/:id]` | list (no hash), create (the token is shown once), revoke |
 | GET | `/api/health` | `{ok: true, version}` (no auth) |
+
+## Cities
+
+A city is compared by its key, never by the written name. `sawk.city_key(name)` folds the name
+(lowercase, no accents, punctuation as spaces) and looks it up in `sawk.city_aliases`, so
+"Валенсия", "València" and "Valencia" are one city, and "Гран-Канария" is Las Palmas de Gran
+Canaria. An unknown name is its own folded key. `sawk.events` and `sawk.sources` carry
+`city_key`, set by a trigger; inserting or deleting an alias re-keys the rows it moves. The
+feed and pool city filters, `sawk_context` (sources, pool, `canonical`) and the fallback rank's
+window matching all use the key. The seed is in `0005_city_keys.sql`; add a city or a spelling
+with a new migration.
 
 ## Ranking
 

@@ -217,6 +217,31 @@ Deno.test("fallback rank: a trip window moves the person; history and other peop
   await close();
 });
 
+Deno.test("fallback rank: a trip window written in another language matches the city's events", async () => {
+  const { sql, close, exec } = await testDb();
+  await seed(sql);
+  await exec(`
+    create or replace function sawk.loco_windows(p_user uuid, p_from date, p_to date)
+      returns table (city text, country text, tz text, starts_on date, ends_on date, trip text)
+      language sql as $$ select 'Мадрид'::text, 'ES'::text, 'Europe/Madrid'::text, '2026-10-24'::date, '2026-10-24'::date, 't'::text $$;`);
+  await writeFallbackRanks(sql, NOW);
+  const mine = (await sql`select event_id from sawk.feed where user_id = ${USER}::uuid order by event_id`).map((x) =>
+    x.event_id
+  );
+  assertEquals(mine, ["e5"]); // "Мадрид" is Madrid: the Madrid event, not the Valencia ones
+  await close();
+});
+
+Deno.test("windows: a city key beats the written name", () => {
+  const home = { city: "Валенсия", country: "ES", tz: "Europe/Madrid", key: "valencia" };
+  const places = dayPlaces(home, [], "2026-10-24", 2);
+  const valencia = { ...ev({ startsAt: "2026-10-24T18:00:00Z" }), tz: "Europe/Madrid", cityKey: "valencia" };
+  assertEquals(assignDay(valencia, places, NOW), "2026-10-24");
+  assertEquals(assignDay({ ...valencia, cityKey: "madrid" }, places, NOW), null);
+  // No key on one side: the names are compared, as before.
+  assertEquals(assignDay({ ...valencia, cityKey: null }, places, NOW), null);
+});
+
 Deno.test("fallback rank: a profile with no home city is skipped, not an error", async () => {
   const { sql, close } = await testDb();
   await sql`insert into sawk.profiles (user_id) values (${OTHER}::uuid)`;

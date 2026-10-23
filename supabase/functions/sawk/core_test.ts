@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import * as core from "./core.ts";
-import { addEvents } from "./events.ts";
+import { addEvents, listEvents } from "./events.ts";
 import { ev, inHours, setup, USER_A, USER_B, ymd } from "./testkit.ts";
 import { AppError } from "./util.ts";
 
@@ -428,6 +428,49 @@ Deno.test("context: Loco's stays come in as source loco, clipped; Loco home is t
   assertEquals(c.windows[1].tz, "Europe/Madrid");
   assertEquals(c.busy[0].title, "Dinner with Ana");
   assertEquals(c.taste.reviews, 4);
+  await s.close();
+});
+
+Deno.test("context: a city written in the person's language finds the sources and events of that city", async () => {
+  const s = await setup();
+  await s.exec(`
+    create or replace function sawk.loco_home(p_user uuid) returns table (city text, country text, tz text)
+      language sql as $$ select 'Валенсия'::text, 'ES'::text, 'Europe/Madrid'::text $$;
+    create or replace function sawk.loco_windows(p_user uuid, p_from date, p_to date)
+      returns table (city text, country text, tz text, starts_on date, ends_on date, trip text)
+      language sql as $$ select 'Гран-Канария'::text, 'ES'::text, 'Atlantic/Canary'::text, (current_date + 2), (current_date + 4), 'Islas'::text $$;`);
+  await core.addSource(s.ctx(), {
+    city: "Las Palmas de Gran Canaria",
+    kind: "web",
+    url: "https://lp.example/agenda",
+    label: "LP agenda",
+  });
+  await core.addSource(s.ctx(), { city: "Valencia", kind: "web", url: "https://v.example/agenda", label: "V agenda" });
+  await seed(s, USER_A, [
+    ev("Home gig", { startsAt: inHours(24) }),
+    ev("Island gig", { city: "Las Palmas de Gran Canaria", tz: "Atlantic/Canary", startsAt: inHours(24 * 3 + 2) }),
+  ]);
+
+  const c = await core.context(s.ctx(), { days: 10 }) as any;
+  assertEquals(c.windows.map((w: any) => [w.source, w.city, w.canonical]), [
+    ["home", "Валенсия", "Valencia"],
+    ["loco", "Гран-Канария", "Las Palmas de Gran Canaria"],
+    ["home", "Валенсия", "Valencia"],
+  ]);
+  assertEquals(c.sources.map((x: any) => x.label), ["LP agenda", "V agenda"]);
+  assertEquals(c.pool, { "Валенсия": 1, "Гран-Канария": 1 });
+
+  // The pool and the feed take any spelling too.
+  const island = await listEvents(s.ctx(), { city: "Гран-Канария", from: ymd(0), to: ymd(6) });
+  assertEquals(island.events.map((e: any) => e.title), ["Island gig"]);
+  const { runId } = await core.runStart(s.ctx(), { agent: "test" });
+  const ids = (await listEvents(s.ctx(), { city: "Valencia", from: ymd(0), to: ymd(6) })).events.map((e: any) => e.id);
+  await core.rank(s.ctx(), {
+    runId,
+    items: [...ids, island.events[0].id].map((eventId) => ({ eventId, score: 0.5, reason: "r" })),
+  });
+  const home = await core.feed(s.ctx(), { city: "Валенсия" });
+  assertEquals(home.items.map((i) => i.event.title), ["Home gig"]);
   await s.close();
 });
 
