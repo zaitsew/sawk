@@ -32,9 +32,11 @@ Rules every adapter shares:
   is Songkick's "Francisca Valenzuela". A sighting joins a row on the same
   local day and city when their title cores match (the city, a trailing year,
   "tickets" and " en <venue>" stripped) and the venues agree (one unknown, one
-  inside the other, or a naming word in common). One core may also be the
-  other's first words ("Michel Camilo" / "Michel Camilo Trio") when it is the
-  only such row and, if both are timed, they start within 3 hours.
+  inside the other, or a naming word in common), unless both are timed and
+  start more than 3 hours apart. A timed act listing may also be the first
+  words of one all-day listing ("Michel Camilo" at 19:00 / "Michel Camilo
+  Trio" all day) when it is the only such row; a short all-day title (a
+  festival) never takes its longer workshops.
 - After the sources, the ingest folds rows already stored twice that way
   (older rows, or agents' additions, which match by id only) into one, and
   moves the person's state, rating, agent rank and feedback to the row that

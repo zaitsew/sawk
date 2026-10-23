@@ -262,22 +262,24 @@ const PREFIX_HOURS = 3;
 
 /**
  * The candidate (same local day and city) that is `e` under another title, or undefined.
- * Equal cores at the same venue match. Otherwise one core may be the other's first words ("Michel Camilo",
- * "Michel Camilo Trio") when it is the only such candidate and, if both are timed, they start within 3 hours:
- * "Digital Jove 2026" next to two of its workshops matches neither.
+ * Equal cores at the same venue match, unless both are timed and start more than 3 hours apart (a matinee
+ * is not the evening show). Otherwise a timed act listing may be the first words of one all-day listing
+ * ("Michel Camilo" at 19:00, "Michel Camilo Trio" all day) when it is the only such candidate. A short
+ * all-day title never takes longer ones: "Digital Jove 2026" stays apart from its workshops.
  */
 export function variantOf<T extends Sighted>(e: Sighted, cands: T[]): T | undefined {
   const core = coreTitle(e.title, e.venue, e.city);
   if (core.length < 3) return undefined;
-  const here = cands.filter((c) => sameVenue(c.venue, e.venue, e.city));
+  const near = (c: Sighted) =>
+    c.allDay || e.allDay || Math.abs(Date.parse(c.startsAt) - Date.parse(e.startsAt)) <= PREFIX_HOURS * 3_600_000;
+  const here = cands.filter((c) => sameVenue(c.venue, e.venue, e.city) && near(c));
   const cores = here.map((c) => coreTitle(c.title, c.venue, c.city));
   const equal = here.find((_, i) => cores[i] === core);
   if (equal) return equal;
-  const near = (c: T) =>
-    c.allDay || e.allDay || Math.abs(Date.parse(c.startsAt) - Date.parse(e.startsAt)) <= PREFIX_HOURS * 3_600_000;
   const prefixed = here.filter((c, i) => {
-    const [short, long] = cores[i].length < core.length ? [cores[i], core] : [core, cores[i]];
-    return short.length >= PREFIX_MIN && long.startsWith(short + " ") && near(c);
+    const [short, long] = cores[i].length < core.length ? [c, e] : [e, c];
+    const [sc, lc] = cores[i].length < core.length ? [cores[i], core] : [core, cores[i]];
+    return !short.allDay && long.allDay && sc.length >= PREFIX_MIN && lc.startsWith(sc + " ");
   });
   return prefixed.length === 1 ? prefixed[0] : undefined;
 }
@@ -370,6 +372,9 @@ export async function upsertEvents(sql: Sql, events: ReadyEvent[], via: string, 
   });
 }
 
+/** Feed states from weakest to strongest signal: on two rows of one event, the stronger is kept. */
+const FEED_STATE_STRENGTH = ["new", "skipped", "hidden", "saved", "going", "went"] as const;
+
 /** Two stored rows of one event folded into the first: fields richer-wins, every sighting kept. */
 export function foldEvents(keep: Merged, dup: Merged): Merged {
   const timesFromDup = keep.allDay && !dup.allDay;
@@ -381,7 +386,9 @@ export function foldEvents(keep: Merged, dup: Merged): Merged {
     ...keep,
     description: (dup.description?.length ?? 0) > (keep.description?.length ?? 0) ? dup.description : keep.description,
     startsAt: timesFromDup ? dup.startsAt : keep.startsAt,
-    endsAt: timesFromDup ? dup.endsAt : keep.endsAt,
+    endsAt: timesFromDup
+      ? dup.endsAt
+      : keep.endsAt ?? (!keep.allDay && dup.endsAt && dup.endsAt > keep.startsAt ? dup.endsAt : null),
     allDay: timesFromDup ? dup.allDay : keep.allDay,
     tz: timesFromDup ? dup.tz ?? keep.tz : keep.tz ?? dup.tz,
     country: keep.country ?? dup.country,
@@ -426,23 +433,31 @@ export async function collapseDuplicates(sql: Sql, now: Date): Promise<number> {
       if (group.length < 2) continue;
       group.sort((a, b) =>
         Number(plain(b)) - Number(plain(a)) || Number(a.all_day === true) - Number(b.all_day === true) ||
-        Date.parse(iso(a.first_seen_at)!) - Date.parse(iso(b.first_seen_at)!) || ((a.id as string) < (b.id as string) ? -1 : 1)
+        Date.parse(iso(a.first_seen_at)!) - Date.parse(iso(b.first_seen_at)!) ||
+        ((a.id as string) < (b.id as string) ? -1 : 1)
       );
-      const kept: { row: Row; merged: Merged; s: Sighted }[] = [];
-      for (const r of group) {
-        const k = variantOf(sightedOf(r), kept.map((x) => x.s));
-        const into = k && kept.find((x) => x.s === k);
-        if (!into) {
-          kept.push({ row: r, merged: fromRow(r), s: sightedOf(r) });
-          continue;
-        }
-        const keepId = into.row.id as string, dupId = r.id as string;
-        into.merged = foldEvents(into.merged, fromRow(r));
-        await update(tx, keepId, into.merged, now);
+      // A row joins the one it is a variant of, judged against the whole day, when that one comes first
+      // (plainer title, timed, older); otherwise the other row will join it in its turn.
+      const sighted = group.map(sightedOf);
+      const root = new Map<number, number>(); // index -> index of the row it was folded into
+      const merged = new Map<number, Merged>();
+      for (let i = 0; i < group.length; i++) {
+        const r = group[i];
+        const m = variantOf(sighted[i], sighted.filter((_, j) => j !== i));
+        const j = m ? sighted.indexOf(m) : -1;
+        if (j < 0 || j > i) continue;
+        const k = root.get(j) ?? j;
+        if (!sameVenue(sighted[k].venue, sighted[i].venue, sighted[i].city)) continue;
+        root.set(i, k);
+        merged.set(k, foldEvents(merged.get(k) ?? fromRow(group[k]), fromRow(r)));
+        const keepId = group[k].id as string, dupId = r.id as string;
+        await update(tx, keepId, merged.get(k)!, now);
         // The person's own rows: one only on the duplicate moves; on both, the stronger state and an agent's rank win.
+        const STATE_ORDER = tx.array([...FEED_STATE_STRENGTH]);
         await tx`
           update sawk.feed k set
-            state = case when k.state = 'new' then d.state else k.state end,
+            state = case when array_position(${STATE_ORDER}::text[], d.state) > array_position(${STATE_ORDER}::text[], k.state)
+                         then d.state else k.state end,
             rating = coalesce(k.rating, d.rating),
             score = case when k.ranked_by = 'fallback' and d.ranked_by <> 'fallback' then d.score else k.score end,
             reason = case when k.ranked_by = 'fallback' and d.ranked_by <> 'fallback' then d.reason else k.reason end,

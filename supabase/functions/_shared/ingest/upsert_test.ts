@@ -266,6 +266,16 @@ Deno.test("variant: equal cores match; a prefix matches only when it is the one 
     at("Digital Jove 2026 - Showroom XR", "UPV", "2026-11-05T00:00:00Z", true),
   ];
   assertEquals(variantOf(umbrella, workshops), undefined);
+  // A short all-day title takes no longer one, even alone: an umbrella next to one of its workshops.
+  assertEquals(variantOf(workshops[0], [umbrella]), undefined);
+  assertEquals(variantOf(umbrella, [workshops[0]]), undefined);
+  // Equal cores, both timed, hours apart: two performances.
+  assertEquals(
+    variantOf(at("Hamlet Valencia Tickets", "Teatre Talia", "2026-10-26T18:00:00Z"), [
+      at("Hamlet", "Teatre Talia", "2026-10-26T09:00:00Z"),
+    ]),
+    undefined,
+  );
   // Both timed and hours apart: a matinee is not the evening show.
   assertEquals(variantOf(at("Michel Camilo Trio", "Les Arts", "2026-10-26T11:00:00Z"), [camilo]), undefined);
 });
@@ -401,5 +411,35 @@ Deno.test("collapse: a duplicate only on one side moves its feed row; past and c
   assertEquals(await collapseDuplicates(sql, NOW), 1);
   assertEquals((await sql`select event_id from sawk.feed`).map((f) => f.event_id), [b.id]);
   assertEquals((await sql`select count(*)::int as n from sawk.events where id in ('old1', 'old2')`)[0].n, 2);
+  await close();
+});
+
+Deno.test("collapse: a festival and its workshops stay apart whatever the order; the stronger state and end time survive", async () => {
+  const { sql, close } = await testDb();
+  const USER = "33333333-3333-4333-8333-333333333333";
+  const put = (id: string, title: string, startsAt: string, allDay: boolean, endsAt: string | null = null) =>
+    sql`insert into sawk.events (id, title, starts_at, ends_at, all_day, tz, city, venue, category, url, first_seen_at)
+        values (${id}, ${title}, ${startsAt}::timestamptz, ${endsAt}::timestamptz, ${allDay}, 'Europe/Madrid', 'Valencia',
+                'UPV', 'other', ${"https://x.test/" + id}, ${NOW.toISOString()}::timestamptz)`;
+  // "a…" sorts first: the umbrella is processed before both workshops.
+  await put("a-umbrella", "Digital Jove 2026", "2026-11-04T23:00:00Z", true);
+  await put("b-pixel", "Digital Jove 2026 - Pixel Art", "2026-11-04T23:00:00Z", true);
+  await put("c-xr", "Digital Jove 2026 - Showroom XR", "2026-11-04T23:00:00Z", true);
+  // Two timed rows of one talk: the kept one has no end, the other knows it.
+  await put("d-talk", "AI Night", "2026-11-04T18:00:00Z", false);
+  await put("e-talk", "AI Night Valencia Tickets", "2026-11-04T18:00:00Z", false, "2026-11-04T20:00:00Z");
+  await sql`insert into sawk.feed (user_id, event_id, score, reason, ranked_by, state) values
+            (${USER}::uuid, 'd-talk', 0.5, 'r', 'fallback', 'saved'),
+            (${USER}::uuid, 'e-talk', 0.5, 'r', 'fallback', 'going')`;
+  assertEquals(await collapseDuplicates(sql, NOW), 1);
+  assertEquals((await sql`select id from sawk.events order by id`).map((r) => r.id), [
+    "a-umbrella",
+    "b-pixel",
+    "c-xr",
+    "d-talk",
+  ]);
+  const [talk] = await sql`select ends_at from sawk.events where id = 'd-talk'`;
+  assertEquals(new Date(talk.ends_at as string).toISOString(), "2026-11-04T20:00:00.000Z");
+  assertEquals((await sql`select state from sawk.feed where user_id = ${USER}::uuid`).map((r) => r.state), ["going"]);
   await close();
 });
