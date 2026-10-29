@@ -478,7 +478,7 @@ Deno.test("context: no home city says how to set it; history and last runs are t
   const s = await setup();
   const none = await core.context(s.ctx(), {}) as any;
   assertEquals(none.windows, []);
-  assert(none.hints[0].includes("sawk_profile"));
+  assert(none.hints[0].includes("sawk_profile_update"));
 
   await core.profile(s.ctx(), { set: { homeCity: "Valencia", homeTz: "Europe/Madrid" } });
   const { runId, ids } = await seed(s, USER_A, [ev("Jazz"), ev("Techno", { category: "nightlife" })]);

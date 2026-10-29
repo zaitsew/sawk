@@ -597,7 +597,7 @@ export async function context(ctx: Ctx, args: unknown) {
     }
   } else {
     hints.push(
-      "No home city is set. Ask the person where they live and call sawk_profile with set.homeCity (and homeCountry, homeTz).",
+      "No home city is set. Ask the person where they live and call sawk_profile_update with set.homeCity (and homeCountry, homeTz).",
     );
   }
   windows.sort((x, y) => x.from.localeCompare(y.from) || x.city.localeCompare(y.city));

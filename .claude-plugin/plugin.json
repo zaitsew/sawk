@@ -1,0 +1,10 @@
+{
+  "name": "sawk",
+  "version": "0.1.0",
+  "description": "SAWk: a personal feed of offline events where you live and travel, filled and ranked by your agent. Skill plus the SAWk MCP server.",
+  "author": { "name": "Ivan Zaitsev" },
+  "homepage": "https://github.com/zaitsew/sawk",
+  "repository": "https://github.com/zaitsew/sawk",
+  "license": "Apache-2.0",
+  "keywords": ["events", "feed", "mcp", "personal"]
+}

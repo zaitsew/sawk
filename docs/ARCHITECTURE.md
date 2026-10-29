@@ -38,6 +38,11 @@ edge function), not through PostgREST, so schema `sawk` is never exposed over th
 
 ## Auth
 
+The function publishes RFC 9728 metadata at `/.well-known/oauth-protected-resource` (also under `/mcp`) and
+answers a missing or bad token with `401` and `WWW-Authenticate: Bearer resource_metadata="…"`. The metadata names
+the project's Supabase Auth issuer, which serves the authorization-server metadata, dynamic client registration and
+PKCE S256. That is the discovery path Claude and ChatGPT custom connectors follow.
+
 `Authorization: Bearer <token>` on every call, one of:
 
 - **A Supabase user JWT** of the project (a session, or an OAuth agent token from the
@@ -64,9 +69,15 @@ All tools take and return JSON. Dates are `YYYY-MM-DD`, times ISO 8601 with offs
 | `sawk_rank` | `{runId, items: [{eventId, score 0..1, reason}] (≤200)}` | `{ranked}`; keeps the person's state and rating |
 | `sawk_feed` | `{from?, to?, city?, state?, limit? = 30}` | ranked feed items with their events |
 | `sawk_feedback` | `{eventId, action, rating?, note?}` | the feed row after it |
-| `sawk_profile` | `{set?: Partial<Profile>}` | the profile (after the update) |
+| `sawk_profile` | `{}` | the profile |
+| `sawk_profile_update` | `{set: Partial<Profile>}` | the profile (after the update) |
 | `sawk_add_source` | `{city, country?, kind, url, label, categories?}` | the source row |
 | `sawk_add_window` | `{city, country?, tz?, from, to, note?}` | the window row |
+
+Every tool has a `title` and all four hints set. Read-only: `sawk_context`, `sawk_events`, `sawk_feed`,
+`sawk_profile`. Destructive (overwrites what was stored): `sawk_rank`, `sawk_feedback`, `sawk_profile_update`.
+Additive writes: `sawk_run_start`, `sawk_run_finish`, `sawk_add_events`, `sawk_add_source`, `sawk_add_window`.
+`openWorldHint` is false everywhere; the server never fetches a page for a tool call. `http_test.ts` pins this.
 
 `EventIn` (validated server-side; one bad event is rejected, not the batch):
 
@@ -91,7 +102,7 @@ For the web feed and Loco. Same auth, JSON bodies, same shapes as the MCP tools.
 | GET | `/api/context?days=` | `sawk_context` |
 | GET | `/api/feed?from=&to=&city=&state=&limit=` | `sawk_feed` |
 | POST | `/api/feedback` | `sawk_feedback` |
-| GET, PUT | `/api/profile` | `sawk_profile` |
+| GET, PUT | `/api/profile` | `sawk_profile`, `sawk_profile_update` |
 | GET, POST, DELETE | `/api/windows[/:id]` | `sawk_add_window` + list + delete |
 | GET | `/api/runs?limit=` | the person's runs, newest first |
 | GET, POST, DELETE | `/api/tokens[/:id]` | list (no hash), create (the token is shown once), revoke |
