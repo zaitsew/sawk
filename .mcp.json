@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "sawk": {
+      "type": "http",
+      "url": "${SAWK_URL}/mcp"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "sawk",
+  "owner": { "name": "Ivan Zaitsev" },
+  "metadata": { "description": "SAWk: a personal events feed, run by your own agent. Needs your own SAWk deployment." },
+  "plugins": [
+    {
+      "name": "sawk",
+      "source": "./",
+      "description": "Fill and rank your SAWk events feed, or answer \"what's on tonight\". Skill plus the SAWk MCP server (OAuth with your Loco account).",
+      "category": "productivity"
+    }
+  ]
+}

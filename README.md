@@ -18,7 +18,12 @@ supabase functions deploy sawk sawk-ingest --no-verify-jwt
 ./check.sh                    # tests and what is still missing
 ```
 
-Then connect an agent: `docs/AGENTS.md`.
+Then connect an agent: `docs/AGENTS.md`. In Claude Code the skill and the MCP server install as one plugin:
+
+```
+export SAWK_URL=https://<ref>.supabase.co/functions/v1/sawk
+claude plugin marketplace add zaitsew/sawk && claude plugin install sawk@sawk
+```
 
 ## How it works
 

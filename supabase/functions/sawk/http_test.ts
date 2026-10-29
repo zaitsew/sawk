@@ -2,28 +2,36 @@ import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import { TOOL_NAMES } from "./mcp.ts";
 import { ev, inHours, jwt, setup, USER_A, USER_B } from "./testkit.ts";
 
-Deno.test("tools/list: the eleven tools, each described for an agent and annotated", async () => {
+Deno.test("tools/list: the twelve tools, each described for an agent and annotated", async () => {
   const s = await setup();
   const r = await s.rpc(await jwt(), "tools/list");
   const tools = r.json.result.tools as Array<
-    { name: string; description: string; annotations: Record<string, boolean>; inputSchema: any }
+    { name: string; title: string; description: string; annotations: Record<string, boolean>; inputSchema: any }
   >;
   assertEquals(tools.map((t) => t.name).sort(), [...TOOL_NAMES].sort());
-  assertEquals(tools.length, 11);
+  assertEquals(tools.length, 12);
   for (const t of tools) {
     assert(
       t.description.length > 60 && t.description.length < 900,
       `${t.name}: description length ${t.description.length}`,
     );
     assert(/^(Call|Returns)/.test(t.description), `${t.name} says when to call it`);
-    assertEquals(typeof t.annotations.readOnlyHint, "boolean");
+    assert(t.title, `${t.name} has a title`);
+    for (const h of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) {
+      assertEquals(typeof t.annotations[h], "boolean", `${t.name}.${h}`);
+    }
     assertEquals(t.inputSchema.type, "object");
   }
   const by = Object.fromEntries(tools.map((t) => [t.name, t]));
   for (const name of ["sawk_context", "sawk_events", "sawk_feed"]) {
     assertEquals(by[name].annotations.readOnlyHint, true, name);
   }
+  assertEquals(by.sawk_profile.annotations.readOnlyHint, true);
+  for (const name of ["sawk_rank", "sawk_feedback", "sawk_profile_update"]) {
+    assertEquals(by[name].annotations.destructiveHint, true, name);
+  }
   assertEquals(by.sawk_add_events.annotations.readOnlyHint, false);
+  assertEquals(by.sawk_add_events.annotations.destructiveHint, false);
   assertEquals(by.sawk_add_events.inputSchema.properties.events.maxItems, 100);
   assertEquals(by.sawk_rank.inputSchema.properties.items.maxItems, 200);
   assertEquals(by.sawk_add_events.inputSchema.required.sort(), ["events", "runId"]);
@@ -49,7 +57,7 @@ Deno.test("a whole scheduled run over MCP with a PAT", async () => {
   const t = (name: string, args: Record<string, unknown> = {}) => s.tool(token, name, args);
 
   assertEquals(
-    (await t("sawk_profile", {
+    (await t("sawk_profile_update", {
       set: { homeCity: "Valencia", homeCountry: "ES", homeTz: "Europe/Madrid", likes: ["jazz"] },
     })).data.homeCity,
     "Valencia",
@@ -118,7 +126,7 @@ Deno.test("MCP tool errors are isError results an agent can act on, not protocol
   assertEquals(run.isError, true);
   assertStringIncludes(run.text, "not_found");
   assertStringIncludes(run.text, "sawk_run_start");
-  const prof = await s.tool(bearer, "sawk_profile", { set: { homeTz: "Mars/Base" } });
+  const prof = await s.tool(bearer, "sawk_profile_update", { set: { homeTz: "Mars/Base" } });
   assertEquals(prof.isError, true);
   assertStringIncludes(prof.text, "IANA");
   const unknown = await s.tool(bearer, "sawk_feedback", { eventId: "ev_nope", action: "save" });

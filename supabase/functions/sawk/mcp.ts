@@ -1,4 +1,4 @@
-// The MCP adapter: the eleven tools, each a thin wrapper over the core. The
+// The MCP adapter: the twelve tools, each a thin wrapper over the core. The
 // descriptions are what an agent in Claude, ChatGPT, Grok or Codex reads to
 // choose a tool, so they say when to call it and what comes back.
 
@@ -19,6 +19,7 @@ export const TOOL_NAMES = [
   "sawk_feed",
   "sawk_feedback",
   "sawk_profile",
+  "sawk_profile_update",
   "sawk_add_source",
   "sawk_add_window",
 ] as const;
@@ -46,7 +47,7 @@ export function buildServer(ctx: Ctx, telemetry: Telemetry): McpServer {
     description: string,
     shape: Record<string, z.ZodType>,
     fn: (args: unknown) => Promise<unknown>,
-    hints: { readOnly?: boolean; idempotent?: boolean } = {},
+    hints: { readOnly?: boolean; destructive?: boolean; idempotent?: boolean } = {},
   ) => {
     server.registerTool(
       name,
@@ -55,8 +56,10 @@ export function buildServer(ctx: Ctx, telemetry: Telemetry): McpServer {
         description,
         inputSchema: shape,
         annotations: {
+          // Spelled out on every tool (directory review reads all four). Destructive means the call
+          // overwrites what the person or an earlier call stored; additive writes are not.
           readOnlyHint: hints.readOnly ?? false,
-          destructiveHint: false,
+          destructiveHint: hints.destructive ?? false,
           idempotentHint: hints.idempotent ?? hints.readOnly ?? false,
           openWorldHint: false,
         },
@@ -183,7 +186,7 @@ export function buildServer(ctx: Ctx, telemetry: Telemetry): McpServer {
       })).min(1).max(200),
     },
     (a) => core.rank(ctx, a),
-    { idempotent: true },
+    { destructive: true, idempotent: true },
   );
 
   tool(
@@ -214,12 +217,22 @@ export function buildServer(ctx: Ctx, telemetry: Telemetry): McpServer {
       note: z.string().max(500).optional(),
     },
     (a) => core.feedback(ctx, a),
+    { destructive: true },
   );
 
   tool(
     "sawk_profile",
-    "Read or update the profile",
-    "Call without arguments to read the person's profile. Call with `set` to change only the fields you pass, when they tell you something lasting (where they live, what they like or avoid, a price cap). Lists hold at most 30 short items. Returns the profile after the update.",
+    "Read the profile",
+    "Call this to read the person's profile: where they live, languages, likes, avoids, notes in their own words, price cap and how many items per day to show first. Takes no arguments. Returns the profile.",
+    {},
+    (a) => core.profile(ctx, a),
+    { readOnly: true },
+  );
+
+  tool(
+    "sawk_profile_update",
+    "Update the profile",
+    "Call this when the person tells you something lasting: where they live, what they like or avoid, a price cap. Changes only the fields you pass in `set` and replaces their earlier values; null clears homeCity, homeCountry, homeTz and priceMax. Lists hold at most 30 short items. Returns the profile after the update.",
     {
       set: z.object({
         homeCity: z.string().max(100).nullable().optional(),
@@ -232,9 +245,10 @@ export function buildServer(ctx: Ctx, telemetry: Telemetry): McpServer {
         priceMax: z.number().nullable().optional().describe("Per-ticket cap in their currency; null for none."),
         currency: z.string().length(3).optional(),
         maxPerDay: z.number().int().min(1).max(10).optional().describe("How many items per day to show first."),
-      }).optional(),
+      }),
     },
     (a) => core.profile(ctx, a),
+    { destructive: true, idempotent: true },
   );
 
   tool(

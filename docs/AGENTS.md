@@ -48,6 +48,21 @@ The nightly run uses `claude -p ... --model sonnet --allowedTools "mcp__sawk__*,
 --max-turns 80`, under `gtimeout` for 45 minutes, and skips the night when `teyla load` says the
 machine is overloaded. It unsets `ANTHROPIC_API_KEY`, so the run bills your subscription.
 
+## Claude Code plugin (skill and MCP server in one step)
+
+An alternative to `scripts/install-claude.sh` when you only want to ask questions, or run the skill by hand. The
+plugin bundles `skills/sawk` and an `.mcp.json` pointing at `${SAWK_URL}/mcp`; sign in with OAuth (Loco account)
+the first time (`/mcp` in Claude Code). It does not store a token or schedule the nightly run.
+
+```
+export SAWK_URL=https://<ref>.supabase.co/functions/v1/sawk
+claude plugin marketplace add zaitsew/sawk
+claude plugin install sawk@sawk
+```
+
+Set `SAWK_URL` in the environment that starts Claude Code. Tools appear as `mcp__plugin_sawk_sawk__sawk_*`.
+The plugin is for the owner and self-hosters: SAWk is single-owner, so it is not listed in a public directory.
+
 ## Claude desktop app and claude.ai (chat)
 
 Docs: https://support.claude.com/en/articles/11175166
@@ -58,8 +73,8 @@ Claude Desktop and claude.ai use one account-level connector list. Remote server
 1. Customize > Connectors > + Add > Add custom connector.
 2. Name: `SAWk`. URL: the MCP URL above. Continue.
 3. Authentication, either:
-   - **Sign in now** (OAuth): sign in with your Loco account when asked. Needs the SAWk server to publish
-     OAuth metadata (server lane; not verified).
+   - **Sign in now** (OAuth): sign in with your Loco account when asked. The SAWk server publishes the OAuth
+     metadata (`/.well-known/oauth-protected-resource`, checked against the deployed function on 2026-10-29).
    - **No sign in** plus **Request headers**: add `Authorization: Bearer sawk_pat_...`. Works without OAuth.
 4. Add. In a chat press **+** > Connectors and switch SAWk on for the conversation.
 5. Ask "what's on this weekend?". The chat answers from the feed (Ask mode,
@@ -102,7 +117,7 @@ against OpenAI's pages.
    https://help.boomi.com/docs/Atomsphere/Platform/Connect_chatgpt_setup).
 2. Create a custom connector: name `SAWk`, URL = the MCP URL, authentication **OAuth**. ChatGPT custom
    connectors support OAuth or no authentication, not a static bearer header, so a personal token does not
-   work here. OAuth goes through Loco's server and needs the SAWk server to publish OAuth metadata.
+   work here. OAuth goes through Loco's Supabase Auth server; SAWk publishes the metadata that points to it.
 3. Sign in with your Loco account when asked. Tick SAWk's tools as allowed.
 4. Ask "what's on tonight?" with the connector enabled in the chat. Put `prompts/ask.md` in a Project.
 5. Nightly alternative: create a **scheduled task** (ask ChatGPT "every day at 6am run this task", or
