@@ -18,7 +18,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE
 BEGIN:VEVENT
-UID:jazz-night@fixture.test
+UID:jazz-night@example.com
 DTSTAMP:20261001T000000Z
 DTSTART;TZID=Europe/Madrid:20261024T213000
 DTEND;TZID=Europe/Madrid:20261024T233000
@@ -37,7 +37,7 @@ DESCRIPTION:Reminder, must not leak into the event
 END:VALARM
 END:VEVENT
 BEGIN:VEVENT
-UID:autumn-market@fixture.test
+UID:autumn-market@example.com
 DTSTART;VALUE=DATE:20261101
 DTEND;VALUE=DATE:20261103
 SUMMARY:Autumn Market
@@ -45,7 +45,7 @@ DESCRIPTION:Entrada libre. Local producers.
 LOCATION:Plaza del Mercado
 END:VEVENT
 BEGIN:VEVENT
-UID:language-exchange@fixture.test
+UID:language-exchange@example.com
 DTSTART;TZID=Europe/Madrid:20261020T190000
 DTEND;TZID=Europe/Madrid:20261020T210000
 RRULE:FREQ=WEEKLY;BYDAY=TU,TH;UNTIL=20261231T000000Z
@@ -55,7 +55,7 @@ LOCATION:Cafe Prueba (Carrer de Prova 5\, Valencia)
 URL:https://venue.fixture.test/events/language-exchange
 END:VEVENT
 BEGIN:VEVENT
-UID:yoga@fixture.test
+UID:yoga@example.com
 DTSTART;TZID=Europe/Madrid:20261021T180000
 DURATION:PT1H
 RRULE:FREQ=WEEKLY;COUNT=6
@@ -63,7 +63,7 @@ SUMMARY:Yoga in the Park
 LOCATION:Parque Prueba
 END:VEVENT
 BEGIN:VEVENT
-UID:yoga@fixture.test
+UID:yoga@example.com
 RECURRENCE-ID;TZID=Europe/Madrid:20261104T180000
 DTSTART;TZID=Europe/Madrid:20261104T200000
 DTEND;TZID=Europe/Madrid:20261104T210000
@@ -71,20 +71,20 @@ SUMMARY:Yoga in the Park (special evening)
 LOCATION:Parque Prueba
 END:VEVENT
 BEGIN:VEVENT
-UID:first-monday@fixture.test
+UID:first-monday@example.com
 DTSTART;TZID=Europe/Madrid:20261005T100000
 DTEND;TZID=Europe/Madrid:20261005T120000
 RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=3
 SUMMARY:First Monday Breakfast
 END:VEVENT
 BEGIN:VEVENT
-UID:yearly@fixture.test
+UID:yearly@example.com
 DTSTART;TZID=Europe/Madrid:20261110T200000
 RRULE:FREQ=YEARLY
 SUMMARY:Yearly Gala
 END:VEVENT
 BEGIN:VEVENT
-UID:cancelled@fixture.test
+UID:cancelled@example.com
 DTSTART:20261026T180000Z
 DTEND:20261026T200000Z
 SUMMARY:Cancelled Concert
@@ -92,25 +92,25 @@ STATUS:CANCELLED
 LOCATION:Sala Prueba
 END:VEVENT
 BEGIN:VEVENT
-UID:floating@fixture.test
+UID:floating@example.com
 DTSTART:20261027T200000
 SUMMARY:Floating Time Talk
 LOCATION:Sala Prueba
 END:VEVENT
 BEGIN:VEVENT
-UID:online@fixture.test
+UID:online@example.com
 DTSTART:20261028T170000Z
 SUMMARY:Online Webinar
 LOCATION:Zoom
 END:VEVENT
 BEGIN:VEVENT
-UID:old@fixture.test
+UID:old@example.com
 DTSTART:20250101T170000Z
 DTEND:20250101T180000Z
 SUMMARY:Long Gone
 END:VEVENT
 BEGIN:VEVENT
-UID:no-start@fixture.test
+UID:no-start@example.com
 SUMMARY:No Start Date
 END:VEVENT
 END:VCALENDAR

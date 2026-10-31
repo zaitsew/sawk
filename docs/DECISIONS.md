@@ -8,7 +8,7 @@ One entry per decision somebody will otherwise re-open.
 the agent ("decide yourself"). Agents (Claude, ChatGPT, Grok, Codex) must connect as the person, and Loco
 must read the feed as the same person.
 
-**Decision.** Schema `sawk` in Loco's project (`ltdiybajsogaydzooiwz`), with its own functions (`sawk`,
+**Decision.** Schema `sawk` in Loco's project, with its own functions (`sawk`,
 `sawk-ingest`) and its own migration ledger (`sawk.migrations`, `scripts/migrate.ts`). It never writes a
 Loco table; it reads Loco through `sawk.loco_*()` functions that return empty without Loco.
 

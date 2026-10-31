@@ -32,8 +32,9 @@ primary = "web"                         # the one platform features land on firs
 identity = "supabase-auth+tokens"                       # none | shared-key | invite-key | supabase-auth |
                                         # supabase-auth+tokens | sign-in-with-apple | icloud
 tenancy = "user_id"                      # single | per-device | user_id | user_id+rls
-backend = "supabase:ltdiybajsogaydzooiwz"                        # none | local-mac | supabase:<ref> | droplet:<name> |
+backend = "supabase"                      # none | local-mac | supabase:<ref> | droplet:<name> |
                                         # vercel | github-pages
+# The Supabase project ref is kept out of this public repo: set SAWK_PROBE_REF locally (see check.sh usage).
 llm = "none"                            # none | byo-key | app-key | proxy-metered |
                                         # byo-key+proxy-metered
 first_run = "sign-in"                      # sign-in | sign-in+skip | none — the screen the
