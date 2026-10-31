@@ -1,0 +1,2 @@
+[exceptions]
+harness-config .mcp.json a SAWK_URL placeholder, not a host; the scanner reads it as a remote URL
