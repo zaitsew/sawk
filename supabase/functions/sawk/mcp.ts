@@ -2,8 +2,8 @@
 // descriptions are what an agent in Claude, ChatGPT, Grok or Codex reads to
 // choose a tool, so they say when to call it and what comes back.
 
-import { McpServer } from "npm:@modelcontextprotocol/sdk@1.30.0/server/mcp.js";
-import { z } from "npm:zod@4.5.4";
+import { McpServer } from "npm:@modelcontextprotocol/sdk@1.32.0/server/mcp.js";
+import { z } from "npm:zod@4.6.6";
 import { ACTIONS, CATEGORIES, FEED_STATES, SOURCE_KINDS } from "../_shared/types.ts";
 import * as core from "./core.ts";
 import { addEvents, listEvents } from "./events.ts";
