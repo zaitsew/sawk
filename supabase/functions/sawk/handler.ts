@@ -9,7 +9,7 @@
 // auth.ts, on every route but /api/health and the metadata.
 // `index.ts` only serves this; kept apart so tests can call `handle`.
 
-import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.30.0/server/webStandardStreamableHttp.js";
+import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.32.0/server/webStandardStreamableHttp.js";
 import type { JWTVerifyGetKey } from "npm:jose@6.1.0";
 import { db, type Sql } from "../_shared/db.ts";
 import { authenticate, type Caller, issuerOf, Unauthorized } from "./auth.ts";
