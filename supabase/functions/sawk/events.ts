@@ -58,7 +58,7 @@ function instant(v: unknown, k: string): string {
   }
   const s = v.trim();
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) || !WITH_OFFSET.test(s)) {
-    throw bad(`${k} must be ISO 8601 with a UTC offset or Z, like 2026-10-24T22:00:00+02:00`);
+    throw bad(`${k} takes ISO 8601 with a UTC offset or Z, like 2026-10-24T22:00:00+02:00`);
   }
   const d = new Date(s);
   if (isNaN(d.getTime())) throw bad(`${k} is not a real date and time`);
@@ -69,7 +69,7 @@ function optNumber(o: Obj, k: string, min: number, max: number): number | null {
   const v = o[k];
   if (v === undefined || v === null || v === "") return null;
   if (typeof v !== "number" || !Number.isFinite(v) || v < min || v > max) {
-    throw bad(`${k} must be a number from ${min} to ${max}`);
+    throw bad(`${k} takes a number from ${min} to ${max}`);
   }
   return v;
 }
@@ -82,7 +82,7 @@ function optUrl(o: Obj, k: string): string | null {
 
 /** Throws `bad(why)` for one event; the batch carries on. */
 export function validateEvent(input: unknown, now: Date): Valid {
-  if (!input || typeof input !== "object" || Array.isArray(input)) throw bad("event must be an object");
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw bad("event is an object");
   const o = input as Obj;
   const title = reqStr(o, "title", 300);
   const city = reqStr(o, "city", 100);
@@ -101,7 +101,7 @@ export function validateEvent(input: unknown, now: Date): Valid {
   let country: string | null = null;
   const c = optStr(o, "country", 2);
   if (c) {
-    if (!/^[A-Za-z]{2}$/.test(c)) throw bad("country must be an ISO 3166-1 alpha-2 code like ES");
+    if (!/^[A-Za-z]{2}$/.test(c)) throw bad("country takes an ISO 3166-1 alpha-2 code like ES");
     country = c.toUpperCase();
   }
   const rawCategory = typeof o.category === "string" ? o.category.trim().toLowerCase() : "";
@@ -119,14 +119,14 @@ export function validateEvent(input: unknown, now: Date): Valid {
   let tags: string[] = [];
   if (o.tags !== undefined && o.tags !== null) {
     if (!Array.isArray(o.tags) || o.tags.some((x) => typeof x !== "string")) {
-      throw bad("tags must be an array of strings");
+      throw bad("tags takes an array of strings");
     }
     tags = [...new Set((o.tags as string[]).map((x) => x.trim().toLowerCase().slice(0, 40)).filter((x) => x !== ""))]
       .slice(0, 10);
   }
   const description = optStr(o, "description", 20_000)?.slice(0, 600) ?? null;
   if (o.isFree !== undefined && o.isFree !== null && typeof o.isFree !== "boolean") {
-    throw bad("isFree must be true or false");
+    throw bad("isFree takes true or false");
   }
   return {
     title,
@@ -165,9 +165,9 @@ export interface AddResult {
 export async function addEvents(ctx: Ctx, args: unknown): Promise<AddResult> {
   const a = obj(args);
   const runId = reqUuid(a, "runId");
-  if (!Array.isArray(a.events) || a.events.length === 0) throw bad("events must be a non-empty array");
+  if (!Array.isArray(a.events) || a.events.length === 0) throw bad("events is a non-empty array");
   if (a.events.length > MAX_EVENTS_PER_CALL) {
-    throw bad(`send at most ${MAX_EVENTS_PER_CALL} events per call; split the rest into another call`);
+    throw bad(`a call takes at most ${MAX_EVENTS_PER_CALL} events`);
   }
   await ownRun(ctx, runId);
 
@@ -283,7 +283,7 @@ export async function listEvents(ctx: Ctx, args: unknown) {
   const from = reqYmd(a, "from");
   const to = reqYmd(a, "to");
   if (to < from) throw bad("to is before from");
-  if (addDays(from, 120) < to) throw bad("ask for at most 120 days at a time");
+  if (addDays(from, 120) < to) throw bad("a range is at most 120 days");
   const category = optEnum(a, "category", CATEGORIES);
   const limit = optInt(a, "limit", 1, 500) ?? 200;
   const tz = (await getProfile(ctx.sql, ctx.userId)).homeTz ?? DEFAULT_TZ;
