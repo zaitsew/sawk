@@ -117,14 +117,14 @@ export async function profile(ctx: Ctx, args: unknown): Promise<Profile> {
     if (has("likes")) next.likes = strList(set.likes, "likes", 30, 40);
     if (has("avoids")) next.avoids = strList(set.avoids, "avoids", 30, 40);
     if (has("notes")) {
-      if (typeof set.notes !== "string") throw bad("notes must be a string");
+      if (typeof set.notes !== "string") throw bad("notes takes a string");
       if (set.notes.length > 2000) throw bad("notes is longer than 2000 characters");
       next.notes = set.notes.trim();
     }
     if (has("priceMax")) next.priceMax = set.priceMax === null ? null : (optNum(set, "priceMax", 0, 1_000_000) ?? null);
     if (has("currency")) {
       const c = optStr(set, "currency", 3);
-      if (!c || !/^[A-Za-z]{3}$/.test(c)) throw bad("currency must be a 3-letter code like EUR");
+      if (!c || !/^[A-Za-z]{3}$/.test(c)) throw bad("currency takes a 3-letter code like EUR");
       next.currency = c.toUpperCase();
     }
     if (has("maxPerDay")) next.maxPerDay = optInt(set, "maxPerDay", 1, 10) ?? cur.maxPerDay;
@@ -166,9 +166,9 @@ function rowToRun(r: Record<string, unknown>) {
 
 /** The caller's own run, or `not_found`. Runs are never shared. */
 export async function ownRun(ctx: Ctx, runId: string): Promise<Record<string, unknown>> {
-  if (!UUID.test(runId)) throw bad("runId must be the id returned by sawk_run_start");
+  if (!UUID.test(runId)) throw bad("runId is the id sawk_run_start returns");
   const rows = await ctx.sql`select * from sawk.runs where id = ${runId}::uuid and user_id = ${ctx.userId}::uuid`;
-  if (!rows[0]) throw notFound("no such run for you; call sawk_run_start to get a runId");
+  if (!rows[0]) throw notFound("no such run for you; sawk_run_start creates a runId");
   return rows[0];
 }
 
@@ -211,9 +211,9 @@ export async function rank(ctx: Ctx, args: unknown) {
   const a = obj(args);
   const runId = reqUuid(a, "runId");
   if (!Array.isArray(a.items) || a.items.length === 0) {
-    throw bad("items must be a non-empty array of {eventId, score, reason}");
+    throw bad("items is a non-empty array of {eventId, score, reason}");
   }
-  if (a.items.length > 200) throw bad("send at most 200 items per call");
+  if (a.items.length > 200) throw bad("a call takes at most 200 items");
   await ownRun(ctx, runId);
 
   const rejected: Array<{ index: number; why: string }> = [];
@@ -223,7 +223,7 @@ export async function rank(ctx: Ctx, args: unknown) {
       const it = obj(raw, "item");
       const eventId = reqStr(it, "eventId", 80);
       const s = typeof it.score === "string" && it.score.trim() !== "" ? Number(it.score) : it.score;
-      if (typeof s !== "number" || !Number.isFinite(s)) throw bad("score must be a number from 0 to 1");
+      if (typeof s !== "number" || !Number.isFinite(s)) throw bad("score takes a number from 0 to 1");
       const reason = reqStr(it, "reason", 20_000).slice(0, 280);
       byId.set(eventId, { index, score: Math.min(1, Math.max(0, s)), reason });
     } catch (e) {
@@ -290,7 +290,7 @@ export async function feed(ctx: Ctx, args: unknown) {
   const from = optYmd(a, "from") ?? today;
   const to = optYmd(a, "to") ?? addDays(from, 14);
   if (to < from) throw bad("to is before from");
-  if (addDays(from, 120) < to) throw bad("ask for at most 120 days at a time");
+  if (addDays(from, 120) < to) throw bad("a range is at most 120 days");
   const city = optStr(a, "city", 100) ?? null;
   const state = optEnum(a, "state", FEED_STATES) ?? null;
   const limit = optInt(a, "limit", 1, 200) ?? 30;
@@ -497,7 +497,7 @@ export async function createToken(ctx: Ctx, args: unknown) {
   const active = await ctx.sql<
     { n: number }
   >`select count(*)::int as n from sawk.tokens where user_id = ${ctx.userId}::uuid and revoked_at is null`;
-  if (Number(active[0].n) >= 20) throw bad("20 active tokens is the limit; revoke one first");
+  if (Number(active[0].n) >= 20) throw bad("20 active tokens is the limit");
   const token = newTokenText();
   const rows = await ctx.sql`
     insert into sawk.tokens (user_id, name, hash, prefix, created_at)
@@ -597,7 +597,7 @@ export async function context(ctx: Ctx, args: unknown) {
     }
   } else {
     hints.push(
-      "No home city is set. Ask the person where they live and call sawk_profile_update with set.homeCity (and homeCountry, homeTz).",
+      "No home city is set; sawk_profile_update takes set.homeCity (and homeCountry, homeTz).",
     );
   }
   windows.sort((x, y) => x.from.localeCompare(y.from) || x.city.localeCompare(y.city));

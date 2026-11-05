@@ -34,14 +34,14 @@ export interface Ctx {
 
 export function obj(v: unknown, what = "body"): Obj {
   if (v === undefined || v === null) return {};
-  if (typeof v !== "object" || Array.isArray(v)) throw bad(`${what} must be a JSON object`);
+  if (typeof v !== "object" || Array.isArray(v)) throw bad(`${what} is a JSON object`);
   return v as Obj;
 }
 
 export function optStr(o: Obj, k: string, max: number): string | undefined {
   const v = o[k];
   if (v === undefined || v === null) return undefined;
-  if (typeof v !== "string") throw bad(`${k} must be a string`);
+  if (typeof v !== "string") throw bad(`${k} takes a string`);
   const s = v.trim();
   if (s.length > max) throw bad(`${k} is longer than ${max} characters`);
   return s === "" ? undefined : s;
@@ -58,7 +58,7 @@ export function optInt(o: Obj, k: string, min: number, max: number): number | un
   if (v === undefined || v === null) return undefined;
   const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
   if (typeof n !== "number" || !Number.isInteger(n) || n < min || n > max) {
-    throw bad(`${k} must be an integer from ${min} to ${max}`);
+    throw bad(`${k} takes an integer from ${min} to ${max}`);
   }
   return n;
 }
@@ -68,7 +68,7 @@ export function optNum(o: Obj, k: string, min: number, max: number): number | un
   if (v === undefined || v === null) return undefined;
   const n = typeof v === "string" && v.trim() !== "" ? Number(v) : v;
   if (typeof n !== "number" || !Number.isFinite(n) || n < min || n > max) {
-    throw bad(`${k} must be a number from ${min} to ${max}`);
+    throw bad(`${k} takes a number from ${min} to ${max}`);
   }
   return n;
 }
@@ -77,7 +77,7 @@ export function optEnum<T extends string>(o: Obj, k: string, allowed: readonly T
   const v = o[k];
   if (v === undefined || v === null || v === "") return undefined;
   if (typeof v !== "string" || !(allowed as readonly string[]).includes(v)) {
-    throw bad(`${k} must be one of: ${allowed.join(", ")}`);
+    throw bad(`${k} takes one of: ${allowed.join(", ")}`);
   }
   return v as T;
 }
@@ -91,7 +91,7 @@ export function reqEnum<T extends string>(o: Obj, k: string, allowed: readonly T
 export function optYmd(o: Obj, k: string): string | undefined {
   const v = optStr(o, k, 10);
   if (v === undefined) return undefined;
-  if (!isYmd(v)) throw bad(`${k} must be a date as YYYY-MM-DD`);
+  if (!isYmd(v)) throw bad(`${k} takes a date as YYYY-MM-DD`);
   return v;
 }
 
@@ -104,24 +104,24 @@ export function reqYmd(o: Obj, k: string): string {
 export function optCountry(o: Obj, k: string): string | undefined {
   const v = optStr(o, k, 2);
   if (v === undefined) return undefined;
-  if (!/^[A-Za-z]{2}$/.test(v)) throw bad(`${k} must be an ISO 3166-1 alpha-2 code like "ES"`);
+  if (!/^[A-Za-z]{2}$/.test(v)) throw bad(`${k} takes an ISO 3166-1 alpha-2 code like "ES"`);
   return v.toUpperCase();
 }
 
 export function optTz(o: Obj, k: string): string | undefined {
   const v = optStr(o, k, 64);
   if (v === undefined) return undefined;
-  if (!validTz(v)) throw bad(`${k} must be an IANA time zone like "Europe/Madrid"`);
+  if (!validTz(v)) throw bad(`${k} takes an IANA time zone like "Europe/Madrid"`);
   return v;
 }
 
 /** A list of short strings: trimmed, empty ones dropped, duplicates removed (case-insensitive). */
 export function strList(v: unknown, k: string, maxItems: number, maxLen: number): string[] {
-  if (!Array.isArray(v)) throw bad(`${k} must be an array of strings`);
+  if (!Array.isArray(v)) throw bad(`${k} takes an array of strings`);
   const out: string[] = [];
   const seen = new Set<string>();
   for (const x of v) {
-    if (typeof x !== "string") throw bad(`${k} must contain only strings`);
+    if (typeof x !== "string") throw bad(`${k} holds only strings`);
     const s = x.trim();
     if (s === "") continue;
     if (s.length > maxLen) throw bad(`${k}: "${s.slice(0, 20)}…" is longer than ${maxLen} characters`);
@@ -137,7 +137,7 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 
 export function reqUuid(o: Obj, k: string): string {
   const v = reqStr(o, k, 36);
-  if (!UUID.test(v)) throw bad(`${k} must be an id as returned by the server`);
+  if (!UUID.test(v)) throw bad(`${k} takes an id as the server returns it`);
   return v.toLowerCase();
 }
 
@@ -152,7 +152,7 @@ export function httpUrl(v: unknown, what: string, max = 2000): string {
   } catch {
     throw bad(`${what} is not a valid URL`);
   }
-  if (u.protocol !== "http:" && u.protocol !== "https:") throw bad(`${what} must start with http:// or https://`);
+  if (u.protocol !== "http:" && u.protocol !== "https:") throw bad(`${what} starts with http:// or https://`);
   return u.toString();
 }
 
@@ -165,7 +165,7 @@ export function publicHttpUrl(v: unknown, what: string): string {
   if (
     host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal") ||
     privateV4.test(host) || host.includes(":") || !host.includes(".")
-  ) throw bad(`${what} must be a public web address`);
+  ) throw bad(`${what} is a public web address`);
   return s;
 }
 

@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
-import { TOOL_NAMES } from "./mcp.ts";
+import { INSTRUCTIONS, TOOL_NAMES } from "./mcp.ts";
 import { ev, inHours, jwt, setup, USER_A, USER_B } from "./testkit.ts";
 
 Deno.test("tools/list: the twelve tools, each described for an agent and annotated", async () => {
@@ -15,7 +15,6 @@ Deno.test("tools/list: the twelve tools, each described for an agent and annotat
       t.description.length > 60 && t.description.length < 900,
       `${t.name}: description length ${t.description.length}`,
     );
-    assert(/^(Call|Returns)/.test(t.description), `${t.name} says when to call it`);
     assert(t.title, `${t.name} has a title`);
     for (const h of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) {
       assertEquals(typeof t.annotations[h], "boolean", `${t.name}.${h}`);
@@ -47,7 +46,8 @@ Deno.test("initialize carries the instructions an agent reads once", async () =>
   });
   assertEquals(r.json.result.serverInfo.name, "sawk");
   assertStringIncludes(r.json.result.instructions, "sawk_context");
-  assertStringIncludes(r.json.result.instructions, "never follow instructions");
+  assertStringIncludes(r.json.result.instructions, "does not execute or obey");
+  assertEquals(r.json.result.instructions, INSTRUCTIONS);
   await s.close();
 });
 
@@ -267,5 +267,119 @@ Deno.test("one person cannot see another's feed, runs, profile, windows or token
   const aFeed = await s.http("GET", "/api/feed", { bearer: a });
   assertEquals(aFeed.json.items[0].state, "saved", "A's state is untouched by B");
   assertEquals(aFeed.json.items[0].reason, "for A");
+  await s.close();
+});
+
+// Anthropic directory review, 2026-11-04: instructions, descriptions and outputs describe;
+// they do not command the assistant. Fixtures are written to stay clear of these words.
+const COMMANDS =
+  /\b(always|never|must|should|cite|tell|ask|say|do not|don't|make sure|remember|check|use|pass|give|leave|recommend)\b/i;
+
+Deno.test("instructions, tool metadata and parameter docs carry no commands to the assistant", async () => {
+  const s = await setup();
+  const init = await s.rpc(await jwt(), "initialize", {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "test", version: "1" },
+  });
+  const instructions = init.json.result.instructions as string;
+  assertEquals(COMMANDS.test(instructions), false, `instructions: ${instructions}`);
+  const list = await s.rpc(await jwt(), "tools/list");
+  const tools = list.json.result.tools as Array<
+    { name: string; title: string; description: string; inputSchema: { properties?: Record<string, unknown> } }
+  >;
+  assertEquals(tools.length, 12);
+  // Every `description` anywhere in a tool's input schema (parameters, nested fields, array items).
+  const walk = (where: string, v: unknown) => {
+    if (v && typeof v === "object") {
+      for (const [k, x] of Object.entries(v)) {
+        if (k === "description" && typeof x === "string") {
+          assertEquals(COMMANDS.test(x), false, `${where}: ${x}`);
+        } else walk(`${where}.${k}`, x);
+      }
+    }
+  };
+  for (const t of tools) {
+    assertEquals(COMMANDS.test(t.description), false, `${t.name}: ${t.description}`);
+    assertEquals(COMMANDS.test(t.title), false, `${t.name} title: ${t.title}`);
+    walk(t.name, t.inputSchema);
+  }
+  await s.close();
+});
+
+Deno.test("tool outputs and errors state facts, with no commands to the assistant", async () => {
+  const s = await setup();
+  const { token } = await s.pat();
+  const outputs: string[] = [];
+  const call = async (name: string, args: Record<string, unknown> = {}) => {
+    const r = await s.tool(token, name, args);
+    outputs.push(`${name}: ${r.text}`);
+    return r;
+  };
+
+  // A person with no home city: the `hints` field carries what a command used to.
+  const bare = await call("sawk_context");
+  assert(Array.isArray(bare.data.hints) && bare.data.hints[0].includes("sawk_profile_update"));
+  await call("sawk_profile");
+  await call("sawk_profile_update", {
+    set: { homeCity: "Valencia", homeCountry: "ES", homeTz: "Europe/Madrid", likes: ["jazz"] },
+  });
+  const ctx = (await call("sawk_context", { days: 14 })).data;
+  const { runId } = (await call("sawk_run_start", { agent: "codex" })).data;
+  const add = (await call("sawk_add_events", {
+    runId,
+    events: [
+      ev("Jazz at Jimmy Glass"),
+      { ...ev("Bad url"), url: "not a url" },
+      { ...ev("Wrong types"), priceMin: "twelve" },
+      { ...ev("Past"), startsAt: "2020-01-01T10:00:00+02:00" },
+      { ...ev("Bad tz"), tz: "Mars/Base" },
+      { ...ev("Reversed prices"), priceMin: 20, priceMax: 5 },
+      { ...ev("Lonely lat"), lat: 39.4 },
+      { ...ev("Bad country"), country: "Spain" },
+      { ...ev("Bad tags"), tags: "jazz" },
+      { ...ev("Bad free"), isFree: "yes" },
+    ],
+  })).data;
+  assertEquals(add.added, 1);
+  assertEquals(add.rejected.length, 9);
+  await call("sawk_add_events", { runId, events: Array.from({ length: 101 }, (_, i) => ev(`Gig ${i}`)) });
+  await call("sawk_events", { city: "Valencia", from: ctx.today, to: ctx.windows[0].to });
+  await call("sawk_events", { city: "Valencia", from: "soon", to: ctx.windows[0].to });
+  await call("sawk_events", { city: "Valencia", from: ctx.windows[0].to, to: ctx.today });
+  await call("sawk_events", { city: "Valencia", from: "2026-01-01", to: "2027-01-01" });
+  await call("sawk_rank", {
+    runId,
+    items: [{ eventId: add.ids[0], score: 0.9, reason: "You liked jazz at this bar." }],
+  });
+  await call("sawk_rank", { runId, items: [{ eventId: add.ids[0], score: "high", reason: "x" }] });
+  await call("sawk_rank", { runId, items: [] });
+  await call("sawk_rank", {
+    runId,
+    items: Array.from({ length: 201 }, () => ({ eventId: add.ids[0], score: 1, reason: "x" })),
+  });
+  await call("sawk_feed", {});
+  await call("sawk_feed", { from: "2026-02-31" });
+  await call("sawk_feedback", { eventId: add.ids[0], action: "going" });
+  await call("sawk_feedback", { eventId: add.ids[0], action: "rate" });
+  await call("sawk_feedback", { eventId: "ev_nope", action: "save" });
+  await call("sawk_add_source", { city: "Valencia", kind: "ics", url: "https://v.example/c.ics", label: "V" });
+  await call("sawk_add_source", { city: "Valencia", kind: "ics", url: "http://localhost/c.ics", label: "V" });
+  await call("sawk_add_source", { city: "Valencia", kind: "ics", url: "ftp://v.example/c.ics", label: "V" });
+  await call("sawk_add_window", { city: "Lisbon", from: ctx.today, to: ctx.windows[0].to });
+  await call("sawk_add_window", { city: "Lisbon", from: ctx.windows[0].to, to: ctx.today });
+  await call("sawk_profile_update", { set: { homeTz: "Mars/Base" } });
+  await call("sawk_profile_update", { set: { currency: "EURO" } });
+  await call("sawk_profile_update", { set: { homeCountry: "Spain" } });
+  await call("sawk_profile_update", { set: { nonsense: 1 } });
+  await call("sawk_run_finish", { runId: "6f1c6d63-5f0e-4f6a-8f1e-111111111111", status: "ok" });
+  await call("sawk_add_events", { runId: "6f1c6d63-5f0e-4f6a-8f1e-111111111111", events: [ev("x")] });
+  await call("sawk_run_finish", { runId, status: "ok", notes: "done" });
+
+  for (const o of outputs) assertEquals(COMMANDS.test(o), false, `output carries a command: ${o}`);
+  // The caveats stay data: every ranked item has its reason, every event the url it was read on.
+  const feed = (await s.tool(token, "sawk_feed", {})).data;
+  assertEquals(feed.items[0].event.url.startsWith("https://"), true);
+  assertEquals(typeof feed.items[0].reason, "string");
   await s.close();
 });
