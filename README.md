@@ -32,6 +32,8 @@ claude plugin marketplace add zaitsew/sawk && claude plugin install sawk@sawk
   busy days, your taste and your history, so Claude and ChatGPT rank by the same facts.
 - **A floor without agents.** A daily ingest reads machine-readable sources (ICS, schema.org JSON-LD,
   Ticketmaster) and ranks by your tags, so the feed is never empty.
+- **Valencia sources are seeded.** Migration `0003` adds 8 Meetup groups, 12 Eventbrite pages, Songkick, Bandsintown, Ticketmaster.es, AllEvents, the Ticketmaster API and 9 venue and agenda pages that only agents read.
+- **The ingest fetches an allow-list of hosts only** (`supabase/functions/_shared/ingest/hosts.ts`: meetup.com, eventbrite.es, songkick.com, bandsintown.com, ticketmaster.es, allevents.in, app.ticketmaster.com, with subdomains). A source on another host is skipped, not failed; agents can still read it.
 - **Self-hostable.** Everything lives in schema `sawk` of any Supabase project. Loco integration turns on by
   itself when Loco's tables are present.
 
