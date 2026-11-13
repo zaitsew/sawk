@@ -5,8 +5,8 @@
 SAWk keeps a personal feed of offline events (concerts, talks, meetups, exhibitions, markets, sport) in the
 city you live in and the cities you travel to. Your AI agents do the legwork on a schedule — Claude Code,
 Codex, ChatGPT, Grok — reading your profile and history through SAWk's MCP server, searching the web, and
-writing back events with a one-line reason each. You read the feed on the web, in [Loco](https://loco.fabriquefutur.com),
-or by asking any connected chat "what's on tonight?".
+writing back events with a one-line reason each. You read the feed in the web app (an installable PWA with Feed,
+Profile and Agents screens), in [Loco](https://loco.fabriquefutur.com), or by asking any connected chat "what's on tonight?".
 
 ## Quick start
 
@@ -18,7 +18,8 @@ supabase functions deploy sawk sawk-ingest --no-verify-jwt
 ./check.sh                    # tests and what is still missing
 ```
 
-Then connect an agent: `docs/AGENTS.md`. In Claude Code the skill and the MCP server install as one plugin:
+Then build the web app: set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see `web/.env.example`), run `npm ci && npm run build` in `web/`.
+`.github/workflows/pages.yml` deploys it to GitHub Pages from repo variables. Connect an agent: `docs/AGENTS.md`. In Claude Code the skill and the MCP server install as one plugin:
 
 ```
 export SAWK_URL=https://<ref>.supabase.co/functions/v1/sawk
@@ -28,6 +29,7 @@ claude plugin marketplace add zaitsew/sawk && claude plugin install sawk@sawk
 ## How it works
 
 - **Agents rank, the server stores.** No model is called server-side; scheduled runs use your own subscriptions.
+- **Twelve MCP tools.** Agents read context, add events, rank, record feedback and update your profile (`sawk_profile_update`).
 - **One context for every agent.** `sawk_context` returns your profile, where you'll be (home and trips), your
   busy days, your taste and your history, so Claude and ChatGPT rank by the same facts.
 - **A floor without agents.** A daily ingest reads machine-readable sources (ICS, schema.org JSON-LD,
@@ -46,3 +48,5 @@ Alpha, one user. Built in public.
 ## Licence
 
 Apache-2.0. See `LICENSE`.
+
+<!-- teyla:reviewed 2026-11-13 -->
