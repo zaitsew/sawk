@@ -1,0 +1,23 @@
+{
+  "name": "SAWk",
+  "tagline": "What's on, offline, where you'll be.",
+  "summary": "Your AI agents find events and rank them for you, one reason each.",
+  "accent": "#A83D18",
+  "accent_dark": "#F08A63",
+  "pills": ["Open source"],
+  "highlights": [
+    {"label": "AGENTS", "title": "Twelve MCP tools", "text": "Agents collect, rank and explain events."},
+    {"label": "INGEST", "title": "Daily, no model needed", "text": "ICS, JSON-LD, Ticketmaster sources."},
+    {"label": "TRAVEL", "title": "Reads your Loco trips", "text": "Travel cities get their own feed."},
+    {"label": "FEED", "title": "Web app (PWA)", "text": "Save, going, hide, and rate after."},
+    {"label": "NIGHTLY", "title": "Claude Code or Codex", "text": "A launchd job runs on your own plan."},
+    {"label": "PLUGIN", "title": "One-step Claude Code install", "text": "Skill and MCP server together."}
+  ],
+  "steps": [
+    {"title": "Set your profile", "text": "Likes, avoids, price cap, languages."},
+    {"title": "Agents read context", "text": "Profile, trips, busy days, history."},
+    {"title": "They search the web", "text": "Each event keeps its source URL."},
+    {"title": "They rank and explain", "text": "A score and a one-line reason."},
+    {"title": "You read the feed", "text": "Web, Loco, or ask any chat."}
+  ]
+}

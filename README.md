@@ -1,12 +1,30 @@
-# SAWk
+<!-- Pictures: docs/readme/spec.json, drawn by readme-kit. Do not edit the SVGs by hand. -->
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/hero-dark.svg"><img src="docs/readme/hero-light.svg" alt="SAWk: what's on, offline, where you'll be. Your AI agents find events and rank them for you, one reason each. Status: building. Web, MCP." width="100%"></picture>
 
-**For the socially awkward: what's on, offline, where you'll be — picked for you.**
+**For the socially awkward: events picked for you, with one reason each, in every city you'll be in.**
 
-SAWk keeps a personal feed of offline events (concerts, talks, meetups, exhibitions, markets, sport) in the
-city you live in and the cities you travel to. Your AI agents do the legwork on a schedule — Claude Code,
-Codex, ChatGPT, Grok — reading your profile and history through SAWk's MCP server, searching the web, and
-writing back events with a one-line reason each. You read the feed in the web app (an installable PWA with Feed,
-Profile and Agents screens), in [Loco](https://loco.fabriquefutur.com), or by asking any connected chat "what's on tonight?".
+SAWk keeps a personal feed of offline events (concerts, talks, meetups, exhibitions, markets, sport) where you live and travel.
+Your AI agents do the legwork on a schedule. Status: alpha, one user, built in public.
+
+[Docs](docs/ARCHITECTURE.md) · [Agents setup](docs/AGENTS.md) · [Loco](https://loco.fabriquefutur.com)
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="web/docs/screens/feed-1280x800-dark.png"><img src="web/docs/screens/feed-1280x800.png" alt="The SAWk web feed: events with a one-line reason and a rating row. Sample data." width="100%"></picture>
+
+## What it does
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/highlights-dark.svg"><img src="docs/readme/highlights-light.svg" alt="Twelve MCP tools; daily ingest without a model; Loco trips; web app; nightly Claude Code or Codex run; one-step Claude Code plugin." width="100%"></picture>
+
+- **Works with your agents.** Claude Code, Codex, ChatGPT and Grok read your profile and history through SAWk's MCP server.
+- **Ask in chat.** Any connected chat answers "what's on tonight?".
+- **A floor without agents.** The daily ingest ranks by your tags, so the feed is never empty.
+
+## How it works
+
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/readme/steps-dark.svg"><img src="docs/readme/steps-light.svg" alt="Set your profile; agents read context; they search the web; they rank and explain; you read the feed." width="100%"></picture>
+
+- **Agents rank, the server stores.** No model is called server-side; scheduled runs use your own subscriptions.
+- **One context for every agent.** `sawk_context` returns your profile, where you'll be (home and trips), your busy days, your taste and your history, so Claude and ChatGPT rank by the same facts.
+- **Self-hostable.** Everything lives in schema `sawk` of any Supabase project. Loco integration turns on by itself when Loco's tables are present.
 
 ## Quick start
 
@@ -18,35 +36,26 @@ supabase functions deploy sawk sawk-ingest --no-verify-jwt
 ./check.sh                    # tests and what is still missing
 ```
 
-Then build the web app: set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (see `web/.env.example`), run `npm ci && npm run build` in `web/`.
-`.github/workflows/pages.yml` deploys it to GitHub Pages from repo variables. Connect an agent: `docs/AGENTS.md`. In Claude Code the skill and the MCP server install as one plugin:
+`./check.sh` is the first-run check: it prints what is still missing. Then connect an agent: [docs/AGENTS.md](docs/AGENTS.md).
+In Claude Code the skill and the MCP server install as one plugin:
 
 ```
 export SAWK_URL=https://<ref>.supabase.co/functions/v1/sawk
 claude plugin marketplace add zaitsew/sawk && claude plugin install sawk@sawk
 ```
 
-## How it works
+## Status and licence
 
-- **Agents rank, the server stores.** No model is called server-side; scheduled runs use your own subscriptions.
-- **Twelve MCP tools.** Agents read context, add events, rank, record feedback and update your profile (`sawk_profile_update`).
-- **One context for every agent.** `sawk_context` returns your profile, where you'll be (home and trips), your
-  busy days, your taste and your history, so Claude and ChatGPT rank by the same facts.
-- **A floor without agents.** A daily ingest reads machine-readable sources (ICS, schema.org JSON-LD,
-  Ticketmaster) and ranks by your tags, so the feed is never empty.
-- **Valencia sources are seeded.** Migration `0003` adds 8 Meetup groups, 12 Eventbrite pages, Songkick, Bandsintown, Ticketmaster.es, AllEvents, the Ticketmaster API and 9 venue and agenda pages that only agents read.
-- **The ingest fetches an allow-list of hosts only** (`supabase/functions/_shared/ingest/hosts.ts`: meetup.com, eventbrite.es, songkick.com, bandsintown.com, ticketmaster.es, allevents.in, app.ticketmaster.com, with subdomains). A source on another host is skipped, not failed; agents can still read it.
-- **Self-hostable.** Everything lives in schema `sawk` of any Supabase project. Loco integration turns on by
-  itself when Loco's tables are present.
+Alpha, one user. Built in public. Apache-2.0, see [LICENSE](LICENSE).
 
-Details: `docs/ARCHITECTURE.md`. Why it is built this way: `docs/DECISIONS.md`.
+## Docs
 
-## Status
+| Document | What is in it |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Parts, auth, the MCP tools |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Why it is built this way |
+| [docs/AGENTS.md](docs/AGENTS.md) | Connecting Claude Code, Codex, ChatGPT, Grok |
+| [docs/SOURCES.md](docs/SOURCES.md) | Event sources and the daily ingest |
+| [docs/LOCO.md](docs/LOCO.md) | Loco integration |
 
-Alpha, one user. Built in public.
-
-## Licence
-
-Apache-2.0. See `LICENSE`.
-
-<!-- teyla:reviewed 2026-11-13 -->
+<sub>Built by <a href="https://github.com/zaitsew">zaitsew</a> with a fleet of AI agents.</sub>
