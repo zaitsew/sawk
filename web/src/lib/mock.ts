@@ -90,7 +90,7 @@ const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const runs: Run[] = [
   { id: "r1", agent: "claude-code", model: "claude-sonnet-5-5", startedAt: ago(9), finishedAt: ago(8.9), status: "ok", cities: ["Valencia"], eventsAdded: 18, ranked: 31, notes: null },
   { id: "r2", agent: "ingest", model: null, startedAt: ago(9.5), finishedAt: ago(9.4), status: "ok", cities: ["Valencia", "Tokyo"], eventsAdded: 42, ranked: 0, notes: null },
-  { id: "r3", agent: "codex", model: "gpt-6.1-sol", startedAt: ago(33), finishedAt: ago(32.8), status: "partial", cities: ["Tokyo"], eventsAdded: 6, ranked: 9, notes: "Two sources timed out." },
+  { id: "r3", agent: "codex", model: "gpt-6.2-sol", startedAt: ago(33), finishedAt: ago(32.8), status: "partial", cities: ["Tokyo"], eventsAdded: 6, ranked: 9, notes: "Two sources timed out." },
   { id: "r4", agent: "chatgpt", model: null, startedAt: ago(57), finishedAt: ago(57), status: "failed", cities: [], eventsAdded: 0, ranked: 0, notes: "Connector was not signed in." },
 ];
 
