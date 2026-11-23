@@ -44,6 +44,14 @@ export SAWK_URL=https://<ref>.supabase.co/functions/v1/sawk
 claude plugin marketplace add zaitsew/sawk && claude plugin install sawk@sawk
 ```
 
+The web feed is a Vite PWA in `web/`. Try it with sample data, no backend:
+
+```
+cd web && npm install && VITE_SAWK_MOCK=1 npm run dev
+```
+
+For a real build, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. For the nightly agent run: `scripts/run-nightly.sh --dry-run` prints what it would do, and `scripts/launchd/` holds the 05:15 job template.
+
 ## Status and licence
 
 Alpha, one user. Built in public. Apache-2.0, see [LICENSE](LICENSE).
@@ -57,5 +65,7 @@ Alpha, one user. Built in public. Apache-2.0, see [LICENSE](LICENSE).
 | [docs/AGENTS.md](docs/AGENTS.md) | Connecting Claude Code, Codex, ChatGPT, Grok |
 | [docs/SOURCES.md](docs/SOURCES.md) | Event sources and the daily ingest |
 | [docs/LOCO.md](docs/LOCO.md) | Loco integration |
+
+<sub>Birthday paradox: put 23 people in a room and two share a birthday with odds above 50%. SAWk is how you find the room.</sub>
 
 <sub>Built by <a href="https://github.com/zaitsew">zaitsew</a> with a fleet of AI agents.</sub>
