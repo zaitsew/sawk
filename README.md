@@ -66,6 +66,17 @@ Alpha, one user. Built in public. Apache-2.0, see [LICENSE](LICENSE).
 | [docs/SOURCES.md](docs/SOURCES.md) | Event sources and the daily ingest |
 | [docs/LOCO.md](docs/LOCO.md) | Loco integration |
 
-<sub>Birthday paradox: put 23 people in a room and two share a birthday with odds above 50%. SAWk is how you find the room.</sub>
+<details>
+<summary>⌖</summary>
+
+**A hare crossing the stubble field** · today 07:12 · free · score 0.97
+
+*You rated two dawn walks 5 of 5. No ticket, no queue, and it ends the moment you reach for your phone.*
+
+<kbd>save</kbd> <kbd>going</kbd> <kbd>hide</kbd>
+
+Not on Meetup, Eventbrite or Songkick. SAWk will never find this one for you.
+
+</details>
 
 <sub>Built by <a href="https://github.com/zaitsew">zaitsew</a> with a fleet of AI agents.</sub>
